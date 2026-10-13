@@ -274,10 +274,10 @@ function MessageRow({
       } px-3 md:px-4 py-2`}
     >
       <div
-        className={`relative max-w-[85%] md:max-w-[76%] rounded-2xl px-4 py-3 shadow-xs ${
+        className={`relative max-w-[85%] md:max-w-[76%] rounded-2xl px-4 py-3 shadow-2xs ${
           user
-            ? "bg-zinc-900 text-white rounded-tr-xs dark:bg-zinc-100 dark:text-zinc-900"
-            : "bg-white text-zinc-800 border border-zinc-200/80 rounded-tl-xs shadow-xs dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100"
+            ? "bg-zinc-100 text-zinc-900 border border-zinc-200/80 rounded-tr-xs dark:bg-zinc-800 dark:border-zinc-700/80 dark:text-zinc-100"
+            : "bg-white text-zinc-900 border border-zinc-200/80 rounded-tl-xs shadow-2xs dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100"
         }`}
       >
         {/* Images */}
@@ -804,13 +804,13 @@ export function ChatApp() {
               onClick={() => !streaming && loadMessages(s.id)}
               className={`group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-all ${
                 s.id === active
-                  ? "bg-zinc-900 font-medium text-white shadow-xs dark:bg-zinc-800 dark:text-zinc-100"
+                  ? "bg-zinc-200/90 font-medium text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
                   : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
               }`}
             >
               <MessageSquare
                 className={`h-4 w-4 shrink-0 ${
-                  s.id === active ? "text-white" : "text-zinc-400"
+                  s.id === active ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"
                 }`}
               />
               <span className="min-w-0 flex-1 truncate text-xs">
@@ -818,7 +818,7 @@ export function ChatApp() {
               </span>
               <span
                 className={`shrink-0 text-[10px] ${
-                  s.id === active ? "text-zinc-300" : "text-zinc-400"
+                  s.id === active ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400"
                 }`}
               >
                 {when(s.updatedAt)}
@@ -979,7 +979,7 @@ export function ChatApp() {
                       className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-2xs transition hover:border-zinc-400 hover:shadow-xs active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-zinc-100 dark:group-hover:text-zinc-900 transition">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-zinc-700 transition">
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">

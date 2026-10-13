@@ -128,11 +128,11 @@ export function ProjectsApp() {
     return <div className="p-10 text-sm text-zinc-400">Loading projects…</div>;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
       <div className="flex min-w-0 flex-1 flex-col p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <h1 className="text-lg font-medium text-zinc-900">Projects</h1>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Projects</h1>
+          <label className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
             <input
               type="checkbox"
               checked={showArchived}
@@ -140,7 +140,7 @@ export function ProjectsApp() {
                 setShowArchived(e.target.checked);
                 void reload(e.target.checked, selectedId);
               }}
-              className="accent-zinc-900"
+              className="accent-zinc-900 dark:accent-zinc-100"
             />
             show archived
           </label>
@@ -149,7 +149,7 @@ export function ProjectsApp() {
               type="color"
               value={npColor}
               onChange={(e) => setNpColor(e.target.value)}
-              className="h-7 w-9 cursor-pointer rounded border border-zinc-300 bg-white"
+              className="h-7 w-9 cursor-pointer rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
               title="Project color"
             />
             <Input
@@ -186,7 +186,7 @@ export function ProjectsApp() {
         </div>
 
         {banner && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+          <div className="mb-3 rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300">
             {banner}
           </div>
         )}
@@ -200,10 +200,10 @@ export function ProjectsApp() {
               <button
                 key={p.id}
                 onClick={() => setSelectedId(p.id)}
-                className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                className={`w-full rounded-xl border p-3 text-left transition-colors cursor-pointer ${
                   p.id === selectedId
-                    ? "border-zinc-900 bg-zinc-50"
-                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                    ? "border-zinc-300 bg-zinc-100/90 shadow-2xs dark:border-zinc-700 dark:bg-zinc-800"
+                    : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
                 } ${p.status === "archived" ? "opacity-60" : ""}`}
               >
                 <div className="flex items-center gap-2">
@@ -211,22 +211,22 @@ export function ProjectsApp() {
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: p.color ?? "#a1a1aa" }}
                   />
-                  <span className="truncate text-sm font-medium text-zinc-900">
+                  <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {p.title}
                   </span>
                 </div>
                 {p.description && (
-                  <p className="mt-1 truncate text-xs text-zinc-500">
+                  <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
                     {p.description}
                   </p>
                 )}
-                <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
                   <span>
                     {p.doneCount}/{p.taskCount} tasks
                   </span>
-                  <div className="h-1 flex-1 overflow-hidden rounded bg-zinc-100">
+                  <div className="h-1 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
                     <div
-                      className="h-full bg-zinc-800"
+                      className="h-full bg-zinc-800 dark:bg-zinc-300"
                       style={{
                         width: p.taskCount
                           ? `${Math.round((p.doneCount / p.taskCount) * 100)}%`
@@ -240,35 +240,35 @@ export function ProjectsApp() {
               </button>
             ))}
             {projects.length === 0 && (
-              <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-400">
+              <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 p-6 text-center text-sm text-zinc-400 dark:text-zinc-500">
                 No projects yet.
               </div>
             )}
           </div>
 
-          <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs">
             {selected ? (
               <>
-                <div className="flex items-center gap-2 border-b border-zinc-100 p-3">
+                <div className="flex items-center gap-2 border-b border-zinc-100 dark:border-zinc-800 p-3">
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-sm font-semibold text-zinc-900">
+                    <h2 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       {selected.title}
                     </h2>
                     {selected.description && (
-                      <p className="truncate text-xs text-zinc-500">
+                      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                         {selected.description}
                       </p>
                     )}
                   </div>
-                  <div className="flex rounded-lg border border-zinc-200 p-0.5">
+                  <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-900 p-0.5">
                     {(["tasks", "gantt"] as const).map((v) => (
                       <button
                         key={v}
                         onClick={() => setPtab(v)}
-                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
+                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
                           ptab === v
-                            ? "bg-zinc-900 text-white"
-                            : "text-zinc-600 hover:text-zinc-900"
+                            ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
+                            : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                         }`}
                       >
                         {v === "tasks" ? (
@@ -301,7 +301,7 @@ export function ProjectsApp() {
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                   {ptab === "tasks" ? (
-                    <ul className="divide-y divide-zinc-100">
+                    <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {projTasks.map((t) => (
                         <li key={t.id} className="flex items-center gap-3 py-2">
                           <select
@@ -309,7 +309,7 @@ export function ProjectsApp() {
                             onChange={(e) =>
                               void setTaskStatus(t, e.target.value as TaskRow["status"])
                             }
-                            className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs"
+                            className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-200 outline-none"
                           >
                             <option value="todo">todo</option>
                             <option value="doing">doing</option>
@@ -318,20 +318,20 @@ export function ProjectsApp() {
                           <span
                             className={`flex-1 truncate text-sm ${
                               t.status === "done"
-                                ? "text-zinc-400 line-through"
-                                : "text-zinc-900"
+                                ? "text-zinc-400 dark:text-zinc-500 line-through"
+                                : "text-zinc-900 dark:text-zinc-100"
                             }`}
                           >
                             {t.title}
                           </span>
-                          <span className="text-xs text-zinc-400">P{t.priority}</span>
+                          <span className="text-xs text-zinc-400 dark:text-zinc-500">P{t.priority}</span>
                           {t.dueDate && (
-                            <span className="text-xs text-zinc-500">{t.dueDate}</span>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">{t.dueDate}</span>
                           )}
                         </li>
                       ))}
                       {projTasks.length === 0 && (
-                        <li className="py-6 text-center text-sm text-zinc-400">
+                        <li className="py-6 text-center text-sm text-zinc-400 dark:text-zinc-500">
                           No tasks in this project.
                         </li>
                       )}
@@ -346,7 +346,7 @@ export function ProjectsApp() {
                 </div>
               </>
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-zinc-400">
+              <div className="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500">
                 Select a project.
               </div>
             )}

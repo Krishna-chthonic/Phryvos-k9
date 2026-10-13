@@ -61,29 +61,29 @@ export function ChangePasswordPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold">Change Password</h2>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Change Password</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Changing your password re-encrypts all vault data under the new master key.
           Sessions will be invalidated and you must re-unlock.
         </p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+        <div className="rounded-lg border border-green-200 dark:border-green-900/60 bg-green-50 dark:bg-green-950/40 p-3 text-sm text-green-700 dark:text-green-300">
           <ShieldCheck className="mr-2 inline h-4 w-4" />
           Password changed successfully. You will be redirected to unlock.
         </div>
       )}
 
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700">
+          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Current Password
           </label>
           <Input
@@ -94,7 +94,7 @@ export function ChangePasswordPanel() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700">
+          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             New Password
           </label>
           <Input
@@ -105,7 +105,7 @@ export function ChangePasswordPanel() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-zinc-700">
+          <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Confirm New Password
           </label>
           <Input

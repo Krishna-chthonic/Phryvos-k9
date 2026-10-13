@@ -128,19 +128,19 @@ export function TasksApp() {
     return <div className="p-10 text-sm text-zinc-400">Loading tasks…</div>;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
       <div className="flex min-w-0 flex-1 flex-col p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <h1 className="text-lg font-medium text-zinc-900">Tasks</h1>
-          <div className="flex rounded-lg border border-zinc-200 p-0.5">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tasks</h1>
+          <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-900 p-0.5">
             {(["board", "gantt", "list"] as View[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors ${
                   view === v
-                    ? "bg-zinc-900 text-white"
-                    : "text-zinc-600 hover:text-zinc-900"
+                    ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
+                    : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 }`}
               >
                 {v === "board" && <Columns3 className="h-3 w-3" />}
@@ -153,7 +153,7 @@ export function TasksApp() {
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs text-zinc-700"
+            className="rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 outline-none"
           >
             <option value="">All projects</option>
             {projects.map((p) => (
@@ -173,7 +173,7 @@ export function TasksApp() {
             <select
               value={newProject}
               onChange={(e) => setNewProject(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-xs"
+              className="rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-2 text-xs text-zinc-700 dark:text-zinc-200 outline-none"
             >
               <option value="">no project</option>
               {projects.map((p) => (
@@ -185,7 +185,7 @@ export function TasksApp() {
             <select
               value={newPriority}
               onChange={(e) => setNewPriority(Number(e.target.value))}
-              className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-xs"
+              className="rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2 py-2 text-xs text-zinc-700 dark:text-zinc-200 outline-none"
             >
               <option value={0}>Low</option>
               <option value={1}>Normal</option>
@@ -199,7 +199,7 @@ export function TasksApp() {
         </div>
 
         {banner && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+          <div className="mb-3 rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300">
             {banner}
           </div>
         )}
@@ -215,7 +215,7 @@ export function TasksApp() {
           </div>
         )}
         {view === "gantt" && (
-          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
             <GanttView
               tasks={filtered}
               depPairs={depPairs}
@@ -225,12 +225,12 @@ export function TasksApp() {
         )}
         {view === "list" && (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
               {filtered.map((t) => (
                 <li
                   key={t.id}
                   onClick={() => setSelectedId(t.id)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-zinc-50"
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
                 >
                   <select
                     value={t.status}
@@ -238,7 +238,7 @@ export function TasksApp() {
                     onChange={(e) =>
                       void onTaskMove(t.id, e.target.value as TaskRow["status"])
                     }
-                    className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs"
+                    className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-700 dark:text-zinc-200"
                   >
                     <option value="todo">todo</option>
                     <option value="doing">doing</option>
@@ -247,16 +247,16 @@ export function TasksApp() {
                   <span
                     className={`flex-1 truncate text-sm ${
                       t.status === "done"
-                        ? "text-zinc-400 line-through"
-                        : "text-zinc-900"
+                        ? "text-zinc-400 dark:text-zinc-500 line-through"
+                        : "text-zinc-900 dark:text-zinc-100"
                     }`}
                   >
                     {t.title}
                   </span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
                     {projects.find((p) => p.id === t.projectId)?.title ?? "—"}
                   </span>
-                  <span className="text-xs text-zinc-500">P{t.priority}</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">P{t.priority}</span>
                   {t.dueDate && (
                     <span className="text-xs text-zinc-500">{t.dueDate}</span>
                   )}

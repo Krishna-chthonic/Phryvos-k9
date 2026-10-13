@@ -207,21 +207,21 @@ export function TaskDetailPanel({
   const totalSec = entries.reduce((n, e) => n + e.durationSec, 0);
 
   return (
-    <aside className="flex h-full w-[380px] shrink-0 flex-col overflow-y-auto border-l border-zinc-200 bg-white p-4">
+    <aside className="flex h-full w-[380px] shrink-0 flex-col overflow-y-auto border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-4">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900">
-          Task <span className="text-zinc-400">#{task.id}</span>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          Task <span className="text-zinc-400 dark:text-zinc-500">#{task.id}</span>
         </h2>
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+          className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
           <X className="h-4 w-4" />
         </button>
       </div>
 
       {error && (
-        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+        <div className="mb-3 rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300">
           {error}
         </div>
       )}
@@ -237,7 +237,7 @@ export function TaskDetailPanel({
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
             rows={2}
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200 dark:focus:ring-zinc-700"
           />
         </div>
         <div className="flex gap-3">
@@ -246,7 +246,7 @@ export function TaskDetailPanel({
             <select
               value={priority}
               onChange={(e) => setPriority(Number(e.target.value))}
-              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none"
             >
               <option value={0}>Low</option>
               <option value={1}>Normal</option>
@@ -273,7 +273,7 @@ export function TaskDetailPanel({
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 outline-none"
             >
               <option value="">— none —</option>
               {projects.map((p) => (
@@ -291,23 +291,23 @@ export function TaskDetailPanel({
 
       {/* dependencies */}
       <div className="mt-6">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           <Link2 className="h-3.5 w-3.5" /> Dependencies
         </div>
         {deps && (
           <div className="space-y-2 text-xs">
             {deps.blockers.length > 0 && (
               <div>
-                <div className="mb-1 text-zinc-500">Blocks this task:</div>
+                <div className="mb-1 text-zinc-500 dark:text-zinc-400">Blocks this task:</div>
                 <ul className="space-y-1">
                   {deps.blockers.map((b) => (
                     <li
                       key={b.id}
-                      className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5"
+                      className="flex items-center justify-between rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1.5"
                     >
                       <span
                         className={
-                          b.status === "done" ? "text-zinc-400" : "text-amber-700"
+                          b.status === "done" ? "text-zinc-400 dark:text-zinc-500" : "text-amber-700 dark:text-amber-400"
                         }
                       >
                         {b.title}
@@ -326,14 +326,14 @@ export function TaskDetailPanel({
             )}
             {deps.blocked.length > 0 && (
               <div>
-                <div className="mb-1 text-zinc-500">This task blocks:</div>
+                <div className="mb-1 text-zinc-500 dark:text-zinc-400">This task blocks:</div>
                 <ul className="space-y-1">
                   {deps.blocked.map((b) => (
                     <li
                       key={b.id}
-                      className="flex items-center justify-between rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5"
+                      className="flex items-center justify-between rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1.5"
                     >
-                      <span>{b.title}</span>
+                      <span className="text-zinc-800 dark:text-zinc-200">{b.title}</span>
                       <button
                         onClick={() => void removeDep(b.id, true)}
                         className="text-zinc-400 hover:text-red-500"
@@ -346,13 +346,13 @@ export function TaskDetailPanel({
               </div>
             )}
             {deps.blockers.length === 0 && deps.blocked.length === 0 && (
-              <div className="text-zinc-400">No dependencies.</div>
+              <div className="text-zinc-400 dark:text-zinc-500">No dependencies.</div>
             )}
             <div className="flex gap-2 pt-2">
               <select
                 value={pickBlocker}
                 onChange={(e) => setPickBlocker(e.target.value)}
-                className="flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5"
+                className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 text-zinc-900 dark:text-zinc-100 outline-none"
               >
                 <option value="">+ task that blocks…</option>
                 {allTasks
@@ -375,7 +375,7 @@ export function TaskDetailPanel({
               <select
                 value={pickBlocked}
                 onChange={(e) => setPickBlocked(e.target.value)}
-                className="flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5"
+                className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1.5 text-zinc-900 dark:text-zinc-100 outline-none"
               >
                 <option value="">+ task this one blocks…</option>
                 {allTasks
@@ -400,9 +400,9 @@ export function TaskDetailPanel({
 
       {/* time tracker */}
       <div className="mt-6">
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-zinc-900">
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           <Timer className="h-3.5 w-3.5" /> Time
-          <span className="ml-auto text-xs font-normal text-zinc-500">
+          <span className="ml-auto text-xs font-normal text-zinc-500 dark:text-zinc-400">
             total {fmtDur(totalSec)}
           </span>
         </div>
@@ -451,12 +451,12 @@ export function TaskDetailPanel({
             {entries.map((e) => (
               <li
                 key={e.id}
-                className="flex items-center justify-between rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600"
+                className="flex items-center justify-between rounded-md bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1 text-xs text-zinc-600 dark:text-zinc-300"
               >
                 <span>
                   {fmtDur(e.durationSec)}
                   {e.note ? ` — ${e.note}` : ""}
-                  <span className="ml-1 text-zinc-400">
+                  <span className="ml-1 text-zinc-400 dark:text-zinc-500">
                     {new Date(e.startedAt).toLocaleString()}
                   </span>
                 </span>
@@ -473,10 +473,10 @@ export function TaskDetailPanel({
       </div>
 
       {/* danger zone */}
-      <div className="mt-6 border-t border-zinc-200 pt-4">
+      <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4">
         <Button
           onClick={removeTask}
-          className="w-full justify-center bg-red-600 hover:bg-red-700"
+          className="w-full justify-center bg-red-600 hover:bg-red-700 text-white"
         >
           <Trash2 className="h-3.5 w-3.5" /> Delete task
         </Button>

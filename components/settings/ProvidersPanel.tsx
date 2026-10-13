@@ -152,21 +152,21 @@ export function ProvidersPanel() {
   };
 
   const input =
-    "h-8 w-full rounded-md border border-zinc-300 bg-white px-2 text-xs outline-none focus:border-zinc-500";
+    "h-8 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs outline-none focus:border-zinc-500 dark:focus:border-zinc-600";
 
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-medium text-zinc-800">AI providers</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">
+          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">AI providers</h2>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             Link any OpenAI-compatible or Anthropic endpoint. Keys are encrypted in the
             vault; chats pick a provider and model per session.
           </p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-xs text-white hover:bg-zinc-700"
+          className="flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 text-xs text-white dark:text-zinc-100 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           {showForm ? "Cancel" : "Add provider"}
@@ -174,21 +174,21 @@ export function ProvidersPanel() {
       </div>
 
       {showForm && (
-        <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4">
+        <div className="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <div className="mb-3 flex flex-wrap gap-1.5">
-            <span className="mr-1 self-center text-[11px] text-zinc-400">Presets:</span>
+            <span className="mr-1 self-center text-[11px] text-zinc-400 dark:text-zinc-500">Presets:</span>
             {PRESETS.map((p) => (
               <button
                 key={p.label}
                 onClick={() => applyPreset(p)}
-                className="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] text-zinc-600 hover:bg-zinc-100"
+                className="rounded-full border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 {p.label}
               </button>
             ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-[11px] text-zinc-500">
+            <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
               Name
               <input
                 value={name}
@@ -197,7 +197,7 @@ export function ProvidersPanel() {
                 className={input + " mt-1"}
               />
             </label>
-            <label className="text-[11px] text-zinc-500">
+            <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
               API protocol
               <select
                 value={kind}
@@ -208,7 +208,7 @@ export function ProvidersPanel() {
                 <option value="anthropic">Anthropic Messages API</option>
               </select>
             </label>
-            <label className="col-span-2 text-[11px] text-zinc-500">
+            <label className="col-span-2 text-[11px] text-zinc-500 dark:text-zinc-400">
               Base URL
               <input
                 value={baseUrl}
@@ -217,7 +217,7 @@ export function ProvidersPanel() {
                 className={input + " mt-1"}
               />
             </label>
-            <label className="text-[11px] text-zinc-500">
+            <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
               API key
               <input
                 type="password"
@@ -227,8 +227,8 @@ export function ProvidersPanel() {
                 className={input + " mt-1"}
               />
             </label>
-            <label className="text-[11px] text-zinc-500">
-              Models <span className="text-zinc-400">(comma separated, optional)</span>
+            <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Models <span className="text-zinc-400 dark:text-zinc-500">(comma separated, optional)</span>
               <input
                 value={models}
                 onChange={(e) => setModels(e.target.value)}
@@ -236,19 +236,19 @@ export function ProvidersPanel() {
                 className={input + " mt-1"}
               />
             </label>
-            <label className="col-span-2 flex items-center gap-2 text-xs text-zinc-600">
+            <label className="col-span-2 flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
               <input
                 type="checkbox"
                 checked={asDefault}
                 onChange={(e) => setAsDefault(e.target.checked)}
-                className="h-3.5 w-3.5 accent-zinc-900"
+                className="h-3.5 w-3.5 accent-zinc-900 dark:accent-zinc-100"
               />
               Use as default provider
             </label>
           </div>
           <div className="mt-3 flex items-center justify-between">
             {err ? (
-              <span className="flex items-center gap-1 text-xs text-red-600">
+              <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
                 <X className="h-3 w-3" /> {err}
               </span>
             ) : (
@@ -257,7 +257,7 @@ export function ProvidersPanel() {
             <button
               onClick={save}
               disabled={saving}
-              className="flex h-7 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-xs text-white hover:bg-zinc-700 disabled:opacity-50"
+              className="flex h-7 items-center gap-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 text-xs text-white dark:text-zinc-100 transition-colors disabled:opacity-50"
             >
               <KeyRound className="h-3 w-3" />
               {saving ? "Saving…" : "Save provider"}
@@ -267,7 +267,7 @@ export function ProvidersPanel() {
       )}
 
       {providers.length === 0 && !showForm && (
-        <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-500">
+        <p className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 p-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
           No providers yet. Pick a preset above or add your own endpoint — local servers
           like Ollama or a homelab LLM gateway work fine as OpenAI-compatible targets.
         </p>
@@ -279,41 +279,41 @@ export function ProvidersPanel() {
           return (
             <li
               key={p.id}
-              className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5"
+              className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5"
             >
               <button
                 onClick={() => setDefault(p.id)}
                 title={p.isDefault ? "Default provider" : "Make default"}
-                className="shrink-0 text-zinc-400 hover:text-zinc-700"
+                className="shrink-0 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
               >
                 <Star
-                  className={`h-4 w-4 ${p.isDefault ? "fill-zinc-900 text-zinc-900" : ""}`}
+                  className={`h-4 w-4 ${p.isDefault ? "fill-amber-500 text-amber-500" : ""}`}
                 />
               </button>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 text-sm text-zinc-800">
+                <div className="flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-200">
                   <span className="truncate font-medium">{p.name}</span>
-                  <span className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                  <span className="rounded border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                     {p.kind}
                   </span>
                   {p.isDefault && (
-                    <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] text-white">
+                    <span className="rounded-full bg-zinc-900 dark:bg-zinc-800 px-2 py-0.5 text-[10px] text-white dark:text-zinc-200">
                       default
                     </span>
                   )}
-                  <span className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                  <span className="rounded border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
                     {p.hasKey ? "key stored" : "no key"}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate text-[11px] text-zinc-500">
+                <div className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
                   {p.baseUrl}
                   {p.models.length > 0 && (
-                    <span className="text-zinc-400"> · {p.models.join(", ")}</span>
+                    <span className="text-zinc-400 dark:text-zinc-500"> · {p.models.join(", ")}</span>
                   )}
                 </div>
                 {t?.detail && (
                   <div
-                    className={`mt-1 text-[11px] ${t.ok ? "text-emerald-600" : "text-red-600"}`}
+                    className={`mt-1 text-[11px] ${t.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                   >
                     {t.ok ? "✓" : "✗"} {t.detail}
                   </div>
@@ -323,7 +323,7 @@ export function ProvidersPanel() {
                 onClick={() => test(p.id)}
                 disabled={t?.busy}
                 title="Test connection"
-                className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-zinc-300 px-2 text-[11px] text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 px-2 text-[11px] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
               >
                 {t?.busy ? "Testing…" : (
                   <>
@@ -334,7 +334,7 @@ export function ProvidersPanel() {
               <button
                 onClick={() => remove(p.id)}
                 title="Delete provider"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-500"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 dark:hover:text-red-400 transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

@@ -15,9 +15,21 @@ interface KanbanColumnProps {
 }
 
 const COLORS = {
-  todo: { bg: "bg-zinc-50", border: "border-zinc-200", text: "text-zinc-600" },
-  doing: { bg: "bg-blue-50", border: "border-blue-100", text: "text-blue-700" },
-  done: { bg: "bg-green-50", border: "border-green-100", text: "text-green-700" },
+  todo: {
+    bg: "bg-zinc-100/70 dark:bg-zinc-900/50",
+    border: "border-zinc-200/80 dark:border-zinc-800",
+    text: "text-zinc-700 dark:text-zinc-300",
+  },
+  doing: {
+    bg: "bg-blue-50/70 dark:bg-blue-950/30",
+    border: "border-blue-100 dark:border-blue-900/40",
+    text: "text-blue-700 dark:text-blue-300",
+  },
+  done: {
+    bg: "bg-emerald-50/70 dark:bg-emerald-950/30",
+    border: "border-emerald-100 dark:border-emerald-900/40",
+    text: "text-emerald-700 dark:text-emerald-300",
+  },
 } as const;
 
 export function KanbanColumn({

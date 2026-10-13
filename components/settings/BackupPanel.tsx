@@ -90,26 +90,26 @@ export function BackupPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold">Backups & Export</h2>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Backups & Export</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Create full export bundles, manage backups, and restore from a zip.
         </p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-600 dark:text-red-400">
           {error}
         </div>
       )}
 
       {/* Run now */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-medium">Create Backup / Export</h3>
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <h3 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">Create Backup / Export</h3>
         <div className="flex items-center gap-3">
           <select
             value={runKind}
             onChange={(e) => setRunKind(e.target.value as "manual" | "export")}
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+            className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-3 py-2 text-sm outline-none"
           >
             <option value="manual">Manual backup</option>
             <option value="export">Export bundle</option>
@@ -122,47 +122,47 @@ export function BackupPanel() {
       </div>
 
       {/* Backup list */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-medium">
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <h3 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
           Backups ({backups.length})
         </h3>
         {loading && backups.length === 0 ? (
-          <p className="py-4 text-center text-sm text-zinc-400">Loading...</p>
+          <p className="py-4 text-center text-sm text-zinc-400 dark:text-zinc-500">Loading...</p>
         ) : backups.length === 0 ? (
-          <p className="py-4 text-center text-sm text-zinc-400">No backups yet.</p>
+          <p className="py-4 text-center text-sm text-zinc-400 dark:text-zinc-500">No backups yet.</p>
         ) : (
           <div className="space-y-2">
             {backups.map((b) => (
               <div
                 key={b.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-100 px-3 py-2"
+                className="flex items-center justify-between rounded-lg border border-zinc-100 dark:border-zinc-800 px-3 py-2"
               >
                 <div className="flex items-center gap-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       b.kind === "export"
-                        ? "bg-green-100 text-green-700"
+                        ? "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400"
                         : b.kind === "manual"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-zinc-100 text-zinc-600"
+                        ? "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                     }`}
                   >
                     {b.kind}
                   </span>
-                  <span className="text-sm text-zinc-700">{b.path.split("/").pop()}</span>
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">{b.path.split("/").pop()}</span>
                   {b.sizeBytes != null && (
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
                       {(b.sizeBytes / 1024).toFixed(1)} KB
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
                     {new Date(b.createdAt).toLocaleString()}
                   </span>
                   <button
                     onClick={() => handleDelete(b.id)}
-                    className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
+                    className="rounded p-1 text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                     title="Delete backup"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -175,9 +175,9 @@ export function BackupPanel() {
       </div>
 
       {/* Restore */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-medium">Restore from Zip</h3>
-        <p className="mb-3 text-xs text-zinc-500">
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <h3 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">Restore from Zip</h3>
+        <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
           Provide the full path to a backup zip file (must exist on disk). Restoring will
           replace the current vault data and invalidate all sessions.
         </p>

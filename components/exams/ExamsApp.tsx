@@ -44,11 +44,11 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xs">
+      <div className="w-full max-w-md rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600">×</button>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg">×</button>
         </div>
         {children}
       </div>
@@ -200,34 +200,34 @@ export function ExamsApp() {
   const totalStudyHrs = (totalStudyMin / 60).toFixed(1);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <div className="flex h-full flex-col gap-4 p-5 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Exam Prep</h1>
+        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Exam Prep</h1>
         <Button variant="primary" onClick={() => setShowSubjectModal(true)}>
           <Plus className="mr-1 h-4 w-4" /> New Subject
         </Button>
       </div>
 
       {state.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-600 dark:text-red-400">
           {state.error}
         </div>
       )}
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Subjects sidebar */}
-        <div className="w-64 flex-shrink-0 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+        <div className="w-64 flex-shrink-0 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             Subjects
           </h2>
           {state.subjects.map((s) => (
             <button
               key={s.id}
               onClick={() => selectSubject(s)}
-              className={`mb-1 w-full rounded-lg p-3 text-left transition-colors ${
+              className={`mb-1 w-full rounded-lg p-3 text-left transition-colors cursor-pointer ${
                 state.selectedSubject?.id === s.id
-                  ? "bg-blue-50 ring-1 ring-blue-200"
-                  : "hover:bg-zinc-50"
+                  ? "bg-blue-50 ring-1 ring-blue-300 dark:bg-blue-950/40 dark:ring-blue-800"
+                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -237,35 +237,35 @@ export function ExamsApp() {
                     style={{ background: s.color }}
                   />
                 )}
-                <span className="font-medium text-sm">{s.name}</span>
+                <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{s.name}</span>
               </div>
               {s.targetDate && (
-                <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500">
+                <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                   <Clock className="h-3 w-3" /> {s.targetDate}
                 </div>
               )}
               <div className="mt-1 flex items-center justify-between text-xs">
-                <span className="text-zinc-500">{s.topicCount} topics</span>
+                <span className="text-zinc-500 dark:text-zinc-400">{s.topicCount} topics</span>
                 <span
                   className="font-medium"
-                  style={{ color: s.avgProgress === 100 ? "green" : s.avgProgress > 50 ? "orange" : "red" }}
+                  style={{ color: s.avgProgress === 100 ? "#10b981" : s.avgProgress > 50 ? "#f59e0b" : "#ef4444" }}
                 >
                   {s.avgProgress}%
                 </span>
               </div>
-              <div className="mt-1 h-1.5 rounded-full bg-zinc-100">
+              <div className="mt-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800">
                 <div
                   className="h-1.5 rounded-full transition-all"
                   style={{
                     width: `${s.avgProgress}%`,
-                    background: s.avgProgress === 100 ? "green" : s.avgProgress > 50 ? "orange" : "red",
+                    background: s.avgProgress === 100 ? "#10b981" : s.avgProgress > 50 ? "#f59e0b" : "#ef4444",
                   }}
                 />
               </div>
             </button>
           ))}
           {state.subjects.length === 0 && (
-            <p className="py-8 text-center text-sm text-zinc-400">No subjects yet</p>
+            <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">No subjects yet</p>
           )}
         </div>
 
@@ -275,9 +275,9 @@ export function ExamsApp() {
             <>
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base font-semibold">{state.selectedSubject.name}</h2>
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{state.selectedSubject.name}</h2>
                   {state.selectedSubject.targetDate && (
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       Target: {state.selectedSubject.targetDate} · {totalStudyHrs}h studied
                     </p>
                   )}
@@ -295,7 +295,7 @@ export function ExamsApp() {
               <div className="flex flex-1 gap-4 overflow-hidden">
                 {/* Topics list */}
                 <div className="flex-1 overflow-y-auto">
-                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     Topics ({state.topics.length})
                   </h3>
                   {state.topics.map((t) => (
@@ -303,13 +303,13 @@ export function ExamsApp() {
                       key={t.id}
                       className={`mb-2 rounded-lg border p-3 ${
                         state.selectedTopic?.id === t.id
-                          ? "border-blue-200 bg-blue-50"
-                          : "border-zinc-200 bg-white"
+                          ? "border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/40"
+                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">{t.name}</span>
-                        <span className="text-xs text-zinc-500">{t.dueDate ?? "No due date"}</span>
+                        <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{t.name}</span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{t.dueDate ?? "No due date"}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <input
@@ -329,53 +329,53 @@ export function ExamsApp() {
                           }}
                           className="flex-1"
                         />
-                        <span className="w-8 text-right text-xs font-medium">{t.progressPct}%</span>
+                        <span className="w-8 text-right text-xs font-medium text-zinc-700 dark:text-zinc-300">{t.progressPct}%</span>
                       </div>
-                      <div className="mt-1 h-1.5 rounded-full bg-zinc-100">
+                      <div className="mt-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800">
                         <div
                           className="h-1.5 rounded-full bg-blue-500 transition-all"
                           style={{ width: `${t.progressPct}%` }}
                         />
                       </div>
                       {t.logCount > 0 && (
-                        <p className="mt-1 text-xs text-zinc-400">{t.logCount} study sessions</p>
+                        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t.logCount} study sessions</p>
                       )}
                     </div>
                   ))}
                   {state.topics.length === 0 && (
-                    <p className="py-8 text-center text-sm text-zinc-400">
+                    <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
                       No topics — add one to get started
                     </p>
                   )}
                 </div>
 
                 {/* Study logs */}
-                <div className="w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3">
-                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                <div className="w-56 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     Recent Logs
                   </h3>
                   {state.logs.slice(0, 10).map((log) => (
-                    <div key={log.id} className="mb-2 border-b border-zinc-100 pb-2 last:border-0">
-                      <div className="flex items-center gap-1 text-xs text-zinc-600">
+                    <div key={log.id} className="mb-2 border-b border-zinc-100 dark:border-zinc-800 pb-2 last:border-0">
+                      <div className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
                         <Clock className="h-3 w-3" />
                         <span>{log.durationMin}min</span>
                       </div>
                       {log.note && (
-                        <p className="truncate text-xs text-zinc-500">{log.note}</p>
+                        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{log.note}</p>
                       )}
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500">
                         {new Date(log.startedAt).toLocaleDateString()}
                       </p>
                     </div>
                   ))}
                   {state.logs.length === 0 && (
-                    <p className="py-4 text-center text-xs text-zinc-400">No study logs yet</p>
+                    <p className="py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">No study logs yet</p>
                   )}
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center text-zinc-400">
+            <div className="flex flex-1 items-center justify-center text-zinc-400 dark:text-zinc-500">
               <div className="text-center">
                 <BookOpen className="mx-auto h-10 w-10 opacity-30" />
                 <p className="mt-2 text-sm">Select a subject to view topics</p>
@@ -389,7 +389,7 @@ export function ExamsApp() {
       <Modal open={showSubjectModal} onClose={() => setShowSubjectModal(false)} title="New Subject">
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Name *</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Name *</label>
             <Input
               value={subjectForm.name}
               onChange={(e) => setSubjectForm((f) => ({ ...f, name: e.target.value }))}
@@ -397,7 +397,7 @@ export function ExamsApp() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Target Date</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Target Date</label>
             <Input
               type="date"
               value={subjectForm.targetDate}
@@ -405,7 +405,7 @@ export function ExamsApp() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Color</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Color</label>
             <Input
               type="color"
               value={subjectForm.color}
@@ -423,7 +423,7 @@ export function ExamsApp() {
       <Modal open={showTopicModal} onClose={() => setShowTopicModal(false)} title="New Topic">
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Topic Name *</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Topic Name *</label>
             <Input
               value={topicForm.name}
               onChange={(e) => setTopicForm((f) => ({ ...f, name: e.target.value }))}
@@ -431,7 +431,7 @@ export function ExamsApp() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Due Date</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Due Date</label>
             <Input
               type="date"
               value={topicForm.dueDate}
@@ -448,7 +448,7 @@ export function ExamsApp() {
       <Modal open={showLogModal} onClose={() => setShowLogModal(false)} title="Log Study Session">
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Duration (min)</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Duration (min)</label>
             <Input
               type="number"
               value={logForm.durationMin}
@@ -457,7 +457,7 @@ export function ExamsApp() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-zinc-700">Notes</label>
+            <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">Notes</label>
             <Input
               value={logForm.note}
               onChange={(e) => setLogForm((f) => ({ ...f, note: e.target.value }))}

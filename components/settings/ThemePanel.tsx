@@ -57,7 +57,7 @@ export function ThemePanel() {
               onClick={() => setTheme(opt.id)}
               className={`flex flex-col items-start rounded-lg border p-3.5 text-left transition-all ${
                 active
-                  ? "border-zinc-900 bg-zinc-50 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:ring-zinc-100"
+                  ? "border-zinc-400 bg-zinc-100/80 ring-1 ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:ring-zinc-600"
                   : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
               }`}
             >

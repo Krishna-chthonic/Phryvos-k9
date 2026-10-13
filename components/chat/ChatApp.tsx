@@ -952,17 +952,17 @@ export function ChatApp() {
         )}
 
         {/* Message Stream or ChatGPT / Gemini Hero Welcome */}
-        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-4">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-4 bg-white dark:bg-zinc-950">
           {!active || (messages.length === 0 && !streamText) ? (
             <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-4 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg ring-4 ring-zinc-100">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg ring-4 ring-zinc-100 dark:bg-zinc-800 dark:ring-zinc-800">
                 <Sparkles className="h-7 w-7 text-emerald-400" />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900">
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
                 What can I help with today?
               </h2>
-              <p className="mt-1.5 text-xs md:text-sm text-zinc-500 max-w-md">
-                I am connected to your encrypted personal vault. I can read & write files, manage tasks, plan exams, and query your database.
+              <p className="mt-1.5 text-xs md:text-sm text-zinc-500 dark:text-zinc-400 max-w-md">
+                I am connected to your encrypted personal vault. I can read & write files, manage tasks, plan exams, compute math, and search the web.
               </p>
 
               {/* 4 Interactive Suggestion Cards */}
@@ -976,17 +976,17 @@ export function ChatApp() {
                         setDraft(s.prompt);
                         textareaRef.current?.focus();
                       }}
-                      className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-2xs transition hover:border-zinc-400 hover:shadow-xs active:scale-[0.99]"
+                      className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-2xs transition hover:border-zinc-400 hover:shadow-xs active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
                     >
                       <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white transition">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-900 group-hover:text-white dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-zinc-100 dark:group-hover:text-zinc-900 transition">
                           <Icon className="h-3.5 w-3.5" />
                         </div>
-                        <span className="text-xs font-semibold text-zinc-800">
+                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                           {s.title}
                         </span>
                       </div>
-                      <p className="mt-2 text-xs text-zinc-500 line-clamp-2 leading-relaxed">
+                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                         {s.prompt}
                       </p>
                     </button>
@@ -995,7 +995,40 @@ export function ChatApp() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto max-w-3xl px-3 md:px-0">
+              {/* Compaction notice banner if session was summarized */}
+              {activeSession && (activeSession.summaryUntil ?? 0) > 0 && (
+                <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs dark:border-indigo-900/50 dark:bg-indigo-950/40">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-medium text-indigo-900 dark:text-indigo-200">
+                      <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                      <span>Context Compacted: Earlier conversation condensed into summary</span>
+                    </div>
+                    {activeSession.summary && (
+                      <button
+                        onClick={() => setSummaryExpanded((o) => !o)}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:underline dark:text-indigo-400"
+                      >
+                        {summaryExpanded ? (
+                          <>
+                            Hide summary <ChevronUp className="h-3 w-3" />
+                          </>
+                        ) : (
+                          <>
+                            View summary <ChevronDown className="h-3 w-3" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {summaryExpanded && activeSession.summary && (
+                    <div className="mt-2.5 rounded-lg border border-indigo-200/60 bg-white/90 p-3 text-zinc-700 whitespace-pre-wrap leading-relaxed dark:border-indigo-800/60 dark:bg-zinc-900 dark:text-zinc-300">
+                      {activeSession.summary}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {messages.map((m) => {
                 const name =
                   m.role === "tool" && m.toolCallId
@@ -1038,7 +1071,7 @@ export function ChatApp() {
         </div>
 
         {/* Composer (ChatGPT/Gemini rounded pill style with ArrowUp mobile send button) */}
-        <div className="shrink-0 border-t border-zinc-100 bg-white px-3 py-3 md:px-4">
+        <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 px-3 py-3 md:px-4">
           <div className="mx-auto max-w-3xl">
             {approval && (
               <ApprovalDialog
@@ -1070,7 +1103,7 @@ export function ChatApp() {
             )}
 
             {/* Pill Container */}
-            <div className="flex items-end gap-2 rounded-3xl border border-zinc-300 bg-white p-2 shadow-xs transition-all focus-within:border-zinc-400 focus-within:shadow-md">
+            <div className="flex items-end gap-2 rounded-3xl border border-zinc-300 bg-white p-2 shadow-xs transition-all focus-within:border-zinc-400 focus-within:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
               <input
                 ref={fileRef}
                 type="file"
@@ -1086,7 +1119,7 @@ export function ChatApp() {
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 title="Attach images"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 transition"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 transition"
               >
                 <ImagePlus className="h-4 w-4" />
               </button>
@@ -1103,7 +1136,7 @@ export function ChatApp() {
                 }}
                 rows={1}
                 placeholder="Ask anything or message your vault…"
-                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-2 text-sm text-zinc-800 outline-none placeholder:text-zinc-400"
+                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-2 text-sm text-zinc-800 dark:text-zinc-100 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
               />
 
               {/* Iconic ChatGPT / Gemini Send Button (Round black with ArrowUp) */}
@@ -1112,9 +1145,9 @@ export function ChatApp() {
                   type="button"
                   onClick={stop}
                   title="Stop generating"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-md transition hover:bg-zinc-800 active:scale-95"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-md transition hover:bg-zinc-800 active:scale-95 dark:bg-zinc-100 dark:text-zinc-900"
                 >
-                  <Square className="h-4 w-4 fill-white" />
+                  <Square className="h-4 w-4 fill-white dark:fill-zinc-900" />
                 </button>
               ) : (
                 <button
@@ -1126,8 +1159,8 @@ export function ChatApp() {
                   title="Send message"
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 shadow-md ${
                     canSend
-                      ? "bg-zinc-900 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer"
-                      : "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+                      ? "bg-zinc-900 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                      : "bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600 cursor-not-allowed"
                   }`}
                 >
                   <ArrowUp className="h-5 w-5 stroke-[2.5]" />
@@ -1160,25 +1193,25 @@ function EditBox({
   busy: boolean;
 }) {
   return (
-    <div className="mx-auto my-2 w-full max-w-3xl rounded-2xl border border-zinc-300 bg-white p-3 shadow-md">
+    <div className="mx-auto my-2 w-full max-w-3xl rounded-2xl border border-zinc-300 bg-white p-3 shadow-md dark:border-zinc-800 dark:bg-zinc-900">
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={3}
-        className="w-full resize-none bg-transparent text-sm text-zinc-800 outline-none"
+        className="w-full resize-none bg-transparent text-sm text-zinc-800 dark:text-zinc-100 outline-none"
       />
       <div className="mt-2 flex justify-end gap-2">
         <button
           onClick={onCancel}
           disabled={busy}
-          className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 disabled:opacity-40"
+          className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           Cancel
         </button>
         <button
           onClick={onSave}
           disabled={busy || !value.trim()}
-          className="rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-40 shadow-xs"
+          className="rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-40 shadow-xs dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           Save & resend
         </button>

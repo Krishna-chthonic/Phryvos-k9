@@ -1,0 +1,294 @@
+import { sql } from "drizzle-orm";
+import { blob, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+
+// phryvos k9 — full vault schema. All timestamps are INTEGER UTC milliseconds.
+
+export const kv = sqliteTable("kv", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at"),
+});
+
+export const auth = sqliteTable("auth", {
+  id: integer("id").primaryKey(),
+  kdf: text("kdf").notNull(),
+  salt: blob("salt").notNull(),
+  verifier: blob("verifier").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const sessions = sqliteTable("sessions", {
+  token: text("token").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+
+export const files = sqliteTable(
+  "files",
+  {
+    id: integer("id").primaryKey(),
+    path: text("path").unique().notNull(), // '/notes/todo.md'; dirs materialized as is_dir=1 rows
+    name: text("name").notNull(),
+    mime: text("mime"),
+    sizeBytes: integer("size_bytes"),
+    isDir: integer("is_dir", { mode: "boolean" }).notNull().default(false),
+    // AES-256-GCM envelope: content encrypted under per-file DEK, DEK wrapped under master key
+    contentEnc: blob("content_enc"),
+    nonce: blob("nonce"),
+    tag: blob("tag"),
+    dek: blob("dek"),
+    dekNonce: blob("dek_nonce"),
+    dekTag: blob("dek_tag"),
+    version: integer("version").notNull().default(1),
+    createdAt: integer("created_at"),
+    updatedAt: integer("updated_at"),
+    deletedAt: integer("deleted_at"),
+  },
+  (t) => [
+    index("idx_files_path").on(t.path),
+    check("files_is_dir_chk", sql`is_dir IN (0,1)`),
+    check("files_version_chk", sql`version >= 1`),
+  ],
+);
+
+// FTS5 virtual tables (created in lib/db/migrate.ts, managed manually by vault-service)
+// files_fts(name, path) — name/full-path search
+// file_content_fts(file_id UNINDEXED, body) — plaintext FTS for text files (documented local tradeoff)
+
+export const fileVersions = sqliteTable(
+  "file_versions",
+  {
+    id: integer("id").primaryKey(),
+    fileId: integer("file_id")
+      .notNull()
+      .references(() => files.id),
+    version: integer("version").notNull(),
+    note: text("note"),
+    createdAt: integer("created_at").notNull(),
+    contentEnc: blob("content_enc"),
+    nonce: blob("nonce"),
+    tag: blob("tag"),
+    dek: blob("dek"),
+    dekNonce: blob("dek_nonce"),
+    dekTag: blob("dek_tag"),
+  },
+  (t) => [
+    uniqueIndex("file_versions_file_version_uq").on(t.fileId, t.version),
+    check("file_versions_version_chk", sql`version >= 1`),
+  ],
+);
+
+export const aiProviders = sqliteTable(
+  "ai_providers",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    // 'openai' = any OpenAI-compatible endpoint (custom providers); 'anthropic' = Anthropic wire format
+    kind: text("kind", { enum: ["openai", "anthropic"] }).notNull(),
+    baseUrl: text("base_url").notNull(),
+    // API key encrypted with the vault master key
+    apiKey: blob("api_key"),
+    keyNonce: blob("key_nonce"),
+    keyTag: blob("key_tag"),
+    models: text("models"), // JSON array of model ids
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [check("ai_providers_kind_chk", sql`kind IN ('openai','anthropic')`)],
+);
+
+export const chatSessions = sqliteTable("chat_sessions", {
+  id: text("id").primaryKey(), // cuid
+  titleEnc: blob("title_enc"),
+  titleNonce: blob("title_nonce"),
+  titleTag: blob("title_tag"),
+  providerId: integer("provider_id").references(() => aiProviders.id),
+  model: text("model").notNull(),
+  summaryEnc: blob("summary_enc"),
+  summaryNonce: blob("summary_nonce"),
+  summaryTag: blob("summary_tag"),
+  summaryUntil: integer("summary_until").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const chatMessages = sqliteTable(
+  "chat_messages",
+  {
+    id: text("id").primaryKey(), // cuid
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => chatSessions.id),
+    seq: integer("seq").notNull(),
+    role: text("role", { enum: ["user", "assistant", "tool"] }).notNull(),
+    contentEnc: blob("content_enc"),
+    contentNonce: blob("content_nonce"),
+    contentTag: blob("content_tag"),
+    // assistant: JSON [{id, name, args, result?, approved?}]
+    toolCalls: text("tool_calls"),
+    toolCallId: text("tool_call_id"),
+    editedAt: integer("edited_at"),
+    deleted: integer("deleted", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("chat_messages_session_seq_uq").on(t.sessionId, t.seq),
+    index("idx_chat_messages_session").on(t.sessionId),
+    check("chat_messages_role_chk", sql`role IN ('user','assistant','tool')`),
+    check("chat_messages_seq_chk", sql`seq >= 0`),
+  ],
+);
+
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  color: text("color"),
+  status: text("status").notNull().default("active"),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: integer("id").primaryKey(),
+    projectId: integer("project_id").references(() => projects.id),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: text("status").notNull().default("todo"),
+    priority: integer("priority").notNull().default(1),
+    dueDate: text("due_date"),
+    startDate: text("start_date"), // feeds Gantt bars
+    tags: text("tags"), // JSON array
+    completedAt: integer("completed_at"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_tasks_project").on(t.projectId),
+    index("idx_tasks_status").on(t.status),
+    check("tasks_status_chk", sql`status IN ('todo','doing','done')`),
+    check("tasks_priority_chk", sql`priority BETWEEN 0 AND 3`),
+  ],
+);
+
+export const taskDeps = sqliteTable(
+  "task_deps",
+  {
+    id: integer("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => tasks.id),
+    blocksTaskId: integer("blocks_task_id")
+      .notNull()
+      .references(() => tasks.id),
+  },
+  (t) => [uniqueIndex("task_deps_pair_uq").on(t.taskId, t.blocksTaskId)],
+);
+
+export const timeEntries = sqliteTable("time_entries", {
+  id: integer("id").primaryKey(),
+  taskId: integer("task_id").references(() => tasks.id),
+  projectId: integer("project_id").references(() => projects.id),
+  startedAt: integer("started_at").notNull(),
+  durationSec: integer("duration_sec").notNull(),
+  note: text("note"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const examSubjects = sqliteTable("exam_subjects", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  targetDate: text("target_date"),
+  color: text("color"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const examTopics = sqliteTable(
+  "exam_topics",
+  {
+    id: integer("id").primaryKey(),
+    subjectId: integer("subject_id")
+      .notNull()
+      .references(() => examSubjects.id),
+    name: text("name").notNull(),
+    progressPct: integer("progress_pct").notNull().default(0),
+    dueDate: text("due_date"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [check("exam_topics_progress_chk", sql`progress_pct BETWEEN 0 AND 100`)],
+);
+
+export const studyLogs = sqliteTable("study_logs", {
+  id: integer("id").primaryKey(),
+  topicId: integer("topic_id").references(() => examTopics.id),
+  subjectId: integer("subject_id").references(() => examSubjects.id),
+  startedAt: integer("started_at").notNull(),
+  durationMin: integer("duration_min").notNull(),
+  notesEnc: blob("notes_enc"),
+  notesNonce: blob("notes_nonce"),
+  notesTag: blob("notes_tag"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const goals = sqliteTable(
+  "goals",
+  {
+    id: integer("id").primaryKey(),
+    title: text("title").notNull(),
+    description: text("description"),
+    targetDate: text("target_date"),
+    progressPct: integer("progress_pct").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [check("goals_progress_chk", sql`progress_pct BETWEEN 0 AND 100`)],
+);
+
+export const goalMilestones = sqliteTable("goal_milestones", {
+  id: integer("id").primaryKey(),
+  goalId: integer("goal_id")
+    .notNull()
+    .references(() => goals.id),
+  title: text("title").notNull(),
+  dueDate: text("due_date"),
+  done: integer("done", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const events = sqliteTable("events", {
+  id: integer("id").primaryKey(),
+  title: text("title").notNull(),
+  startAt: integer("start_at").notNull(),
+  endAt: integer("end_at"),
+  allDay: integer("all_day", { mode: "boolean" }).notNull().default(false),
+  color: text("color"),
+  notes: text("notes"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const backups = sqliteTable(
+  "backups",
+  {
+    id: integer("id").primaryKey(),
+    kind: text("kind", { enum: ["auto", "manual", "export"] }).notNull(),
+    path: text("path").notNull(),
+    sizeBytes: integer("size_bytes"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [check("backups_kind_chk", sql`kind IN ('auto','manual','export')`)],
+);
+
+export const memories = sqliteTable("memories", {
+  id: integer("id").primaryKey(),
+  point: text("point").notNull(),
+  category: text("category").default("fact"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+

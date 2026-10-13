@@ -72,25 +72,26 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser!
 
 ---
 
-## 💻 CLI Reference (`phryvos`)
+## 💻 CLI Reference (`phryvos-k9`)
 
-Phryvos includes a built-in terminal CLI to manage your background daemon effortlessly:
+Phryvos K9 includes a built-in terminal CLI to manage your background daemon effortlessly:
 
 ```bash
-phryvos <command> [options]
+phryvos-k9 <command> [options]
+# (also supports: phryvos k9 <command>)
 ```
 
 | Command | Description |
 | :--- | :--- |
-| `phryvos start` | Start Phryvos server as a background daemon (default port `3000`) |
-| `phryvos start --dev` | Start in development mode with live hot-reloading |
-| `phryvos start -f` | Run in the foreground of the current terminal |
-| `phryvos stop` | Stop the running Phryvos background server |
-| `phryvos restart` | Restart the background server |
-| `phryvos status` | Check if Phryvos is currently running and responding |
-| `phryvos logs` | View the latest server logs (`tail -n 50`) |
-| `phryvos update` | Fetch latest release from Git and automatically rebuild |
-| `phryvos version` | Display installed version |
+| `phryvos-k9 start` | Start Phryvos K9 server as a background daemon (default port `3000`) |
+| `phryvos-k9 start --dev` | Start in development mode with live hot-reloading |
+| `phryvos-k9 start -f` | Run in the foreground of the current terminal |
+| `phryvos-k9 stop` | Stop the running Phryvos K9 background server |
+| `phryvos-k9 restart` | Restart the background server |
+| `phryvos-k9 status` | Check if Phryvos K9 is currently running and responding |
+| `phryvos-k9 logs` | View the latest server logs (`tail -n 50`) |
+| `phryvos-k9 update` | Fetch latest release from Git and automatically rebuild |
+| `phryvos-k9 version` | Display installed version |
 
 ---
 

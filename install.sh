@@ -87,37 +87,36 @@ npm run build --silent
 echo -e "${GREEN}✔ Build completed successfully.${NC}"
 
 # 4. Link CLI Binary
-echo -e "\n${BLUE}[4/4] Linking 'phryvos' command to PATH...${NC}"
+echo -e "\n${BLUE}[4/4] Linking 'phryvos-k9' command to PATH...${NC}"
 chmod +x "${SOURCE_DIR}/bin/phryvos.mjs"
 
-TARGET_BIN=""
+BIN_DIR=""
 if [ -n "$PREFIX" ] && [ -d "$PREFIX/bin" ]; then
-    # Termux environment
-    TARGET_BIN="$PREFIX/bin/phryvos"
+    BIN_DIR="$PREFIX/bin"
 elif [ -w "/usr/local/bin" ]; then
-    TARGET_BIN="/usr/local/bin/phryvos"
+    BIN_DIR="/usr/local/bin"
 else
-    # User local bin
     mkdir -p "$HOME/.local/bin"
-    TARGET_BIN="$HOME/.local/bin/phryvos"
+    BIN_DIR="$HOME/.local/bin"
 fi
 
-ln -sf "${SOURCE_DIR}/bin/phryvos.mjs" "$TARGET_BIN"
-echo -e "${GREEN}✔ Linked executable to ${TARGET_BIN}${NC}"
+ln -sf "${SOURCE_DIR}/bin/phryvos.mjs" "${BIN_DIR}/phryvos-k9"
+ln -sf "${SOURCE_DIR}/bin/phryvos.mjs" "${BIN_DIR}/phryvos"
+echo -e "${GREEN}✔ Linked executables to ${BIN_DIR}/phryvos-k9${NC}"
 
-# Check if TARGET_BIN is in user's PATH
-if ! command -v phryvos >/dev/null 2>&1; then
-    echo -e "${YELLOW}Notice: ${HOME}/.local/bin is not in your PATH.${NC}"
+# Check if BIN_DIR is in user's PATH
+if ! command -v phryvos-k9 >/dev/null 2>&1; then
+    echo -e "${YELLOW}Notice: ${BIN_DIR} is not in your PATH.${NC}"
     echo -e "Add this line to your ~/.bashrc or ~/.zshrc:"
-    echo -e "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo -e "  export PATH=\"${BIN_DIR}:\$PATH\""
 fi
 
 echo -e "\n${GREEN}========================================${NC}"
-echo -e "${GREEN}✨ Phryvos installed successfully!${NC}"
+echo -e "${GREEN}✨ Phryvos K9 installed successfully!${NC}"
 echo -e "${GREEN}========================================${NC}\n"
 echo -e "Usage:"
-echo -e "  ${CYAN}phryvos start${NC}     - Start Phryvos in the background"
-echo -e "  ${CYAN}phryvos status${NC}    - Check server status"
-echo -e "  ${CYAN}phryvos logs${NC}      - View server logs"
-echo -e "  ${CYAN}phryvos stop${NC}      - Stop Phryvos"
-echo -e "  ${CYAN}phryvos update${NC}    - Check for latest updates\n"
+echo -e "  ${CYAN}phryvos-k9 start${NC}     - Start Phryvos K9 in the background"
+echo -e "  ${CYAN}phryvos-k9 status${NC}    - Check server status"
+echo -e "  ${CYAN}phryvos-k9 logs${NC}      - View server logs"
+echo -e "  ${CYAN}phryvos-k9 stop${NC}      - Stop Phryvos K9"
+echo -e "  ${CYAN}phryvos-k9 update${NC}    - Check for latest updates\n"

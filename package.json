@@ -2,6 +2,7 @@
   "name": "phryvos-k9",
   "version": "0.1.0",
   "bin": {
+    "phryvos-k9": "./bin/phryvos.mjs",
     "phryvos": "./bin/phryvos.mjs"
   },
   "private": true,

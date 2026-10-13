@@ -40,11 +40,11 @@ const c = {
 
 function banner() {
   console.log(`
-${c.cyan}${c.bold}   ____  __                               
-  / __ \\/ /_  ______  ______  ______  _____
- / /_/ / __ \\/ ___/ / / / / / / __ \\/ ___/
-/ ____/ / / / /  / /_/ / /_/ / /_/ (__  ) 
-/_/   /_/ /_/_/   \\__, /\\__,_/\\____/____/  
+${c.cyan}${c.bold}   ____  __                                      __ _____ 
+  / __ \\/ /_  ______  ______  ______  _____     / //_/   |
+ / /_/ / __ \\/ ___/ / / / / / / __ \\/ ___/____ / ,<  / /| |
+/ ____/ / / / /  / /_/ / /_/ / /_/ (__  )/___// /| |/ ___ |
+/_/   /_/ /_/_/   \\__, /\\__,_/\\____/____/    /_/ |_/_/  |_|
                  /____/                    ${c.reset}${c.dim}v${pkgVersion}${c.reset}
 `);
 }
@@ -287,14 +287,15 @@ async function cmdUpdate() {
 
 function showHelp() {
   banner();
-  console.log(`${c.bold}Usage:${c.reset} phryvos <command> [options]\n`);
+  console.log(`${c.bold}Usage:${c.reset} phryvos-k9 <command> [options]`);
+  console.log(`       ${c.dim}(or: phryvos k9 <command>)${c.reset}\n`);
   console.log(`${c.bold}Commands:${c.reset}`);
-  console.log(`  ${c.cyan}start${c.reset}        Start Phryvos server in the background`);
-  console.log(`  ${c.cyan}stop${c.reset}         Stop the running Phryvos server`);
-  console.log(`  ${c.cyan}status${c.reset}       Check if Phryvos is currently running`);
+  console.log(`  ${c.cyan}start${c.reset}        Start Phryvos K9 server in the background`);
+  console.log(`  ${c.cyan}stop${c.reset}         Stop the running Phryvos K9 server`);
+  console.log(`  ${c.cyan}status${c.reset}       Check if Phryvos K9 is currently running`);
   console.log(`  ${c.cyan}logs${c.reset}         View recent server logs (tail -n 50)`);
   console.log(`  ${c.cyan}update${c.reset}       Check and apply latest updates from Git`);
-  console.log(`  ${c.cyan}version${c.reset}      Show installed version and release info`);
+  console.log(`  ${c.cyan}version${c.reset}      Show installed version`);
   console.log(`  ${c.cyan}help${c.reset}         Display this help message\n`);
   console.log(`${c.bold}Options for start:${c.reset}`);
   console.log(`  ${c.dim}--foreground, -f${c.reset}   Run in current terminal instead of background`);
@@ -303,7 +304,11 @@ function showHelp() {
 }
 
 // Main execution
-const [,, command, ...args] = process.argv;
+let rawArgs = process.argv.slice(2);
+if (rawArgs[0] === "k9") {
+  rawArgs = rawArgs.slice(1);
+}
+const [command, ...args] = rawArgs;
 
 switch (command) {
   case "start":
@@ -328,7 +333,7 @@ switch (command) {
   case "version":
   case "-v":
   case "--version":
-    console.log(`phryvos v${pkgVersion}`);
+    console.log(`phryvos-k9 v${pkgVersion}`);
     break;
   case "help":
   case "-h":

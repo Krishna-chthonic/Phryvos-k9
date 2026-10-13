@@ -5,7 +5,7 @@
 
 set -e
 
-REPO_URL="https://github.com/phryvos/phryvos.git"
+REPO_URL="https://github.com/Krishna-chthonic/Phryvos-k9.git"
 INSTALL_DIR="${HOME}/.phryvos"
 
 # Terminal Colors

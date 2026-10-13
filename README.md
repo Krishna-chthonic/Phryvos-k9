@@ -50,14 +50,14 @@
 Run this command in your terminal (Linux, macOS, or Android Termux):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<your-username>/phryvos/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Krishna-chthonic/Phryvos-k9/main/install.sh | bash
 ```
 
 ### 2. Manual Clone & Run
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/phryvos.git
+git clone https://github.com/Krishna-chthonic/Phryvos-k9.git
 cd phryvos
 
 # Install dependencies & build

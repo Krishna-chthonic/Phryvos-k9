@@ -265,7 +265,7 @@ async function cmdUpdate() {
 
   // Check GitHub releases via public API
   try {
-    const res = await fetch("https://api.github.com/repos/phryvos/phryvos/releases/latest", {
+    const res = await fetch("https://api.github.com/repos/Krishna-chthonic/Phryvos-k9/releases/latest", {
       headers: { "User-Agent": "phryvos-cli" }
     });
     if (res.ok) {

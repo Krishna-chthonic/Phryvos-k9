@@ -863,24 +863,40 @@ export function ChatApp() {
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setMobileRailOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 md:hidden"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden"
               title="Chat History"
             >
               <PanelLeft className="h-4 w-4" />
               <span>Chats</span>
             </button>
-            <span className="truncate text-sm font-semibold text-zinc-800">
+            <span className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
               {activeSession ? activeSession.title || "New chat" : "AI Assistant"}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
+            {active && messages.length >= 2 && !streaming && (
+              <button
+                onClick={handleCompact}
+                disabled={compacting}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition"
+                title="Compact conversation history to save tokens and keep chat fast"
+              >
+                {compacting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5 text-amber-500" />
+                )}
+                <span className="hidden sm:inline">{compacting ? "Compacting…" : "Compact"}</span>
+              </button>
+            )}
+
             <select
               value={String(providerId)}
               onChange={(e) =>
                 pickProvider(e.target.value === "" ? "" : Number(e.target.value))
               }
-              className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 outline-none"
+              className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
               title="Select Provider"
             >
               <option value="">No provider</option>
@@ -895,7 +911,7 @@ export function ChatApp() {
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="h-8 max-w-[130px] md:max-w-[180px] rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 outline-none"
+                className="h-8 max-w-[130px] md:max-w-[180px] rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
                 title="Model"
               >
                 {modelOptions.map((m) => (
@@ -909,14 +925,14 @@ export function ChatApp() {
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 placeholder="model id…"
-                className="h-8 w-28 md:w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs text-zinc-700 outline-none"
+                className="h-8 w-28 md:w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
               />
             )}
 
             {!streaming && lastMsg?.role === "assistant" && (
               <button
                 onClick={() => send({ regenerate: true })}
-                className="flex h-8 items-center gap-1 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                className="flex h-8 items-center gap-1 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
                 title="Regenerate last reply"
               >
                 <RefreshCw className="h-3 w-3" />

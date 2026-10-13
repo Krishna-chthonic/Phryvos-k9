@@ -79,11 +79,11 @@ if [ -f "/usr/bin/node" ]; then
     export PATH="/usr/bin:/usr/sbin:/sbin:/bin:/usr/local/bin:$PATH"
 fi
 
-npm install --silent
+npm install --legacy-peer-deps
 echo -e "${GREEN}✔ Dependencies installed.${NC}"
 
 echo -e "Building Next.js application..."
-npm run build --silent
+npm run build
 echo -e "${GREEN}✔ Build completed successfully.${NC}"
 
 # 4. Link CLI Binary

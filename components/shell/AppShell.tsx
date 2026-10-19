@@ -59,11 +59,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const lastActivityRef = useRef<number>(Date.now());
 
-  // Listen for custom trigger event
+  // Listen for custom trigger events
   useEffect(() => {
     const handleOpenShortcuts = () => setShortcutsModalOpen(true);
+    const handleOpenMenu = () => setMobileOpen(true);
     window.addEventListener("phryvos:shortcuts", handleOpenShortcuts);
-    return () => window.removeEventListener("phryvos:shortcuts", handleOpenShortcuts);
+    window.addEventListener("phryvos:open-menu", handleOpenMenu);
+    return () => {
+      window.removeEventListener("phryvos:shortcuts", handleOpenShortcuts);
+      window.removeEventListener("phryvos:open-menu", handleOpenMenu);
+    };
   }, []);
 
   // Load persisted collapse state
@@ -156,59 +161,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [lock, toggleSidebar]);
 
   const currentNav = NAV.find((n) => pathname.startsWith(n.href)) ?? NAV[0];
+  const isChat = pathname.startsWith("/chat");
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors">
-      {/* Mobile Top Header */}
-      <header className="fixed top-0 inset-x-0 z-30 flex h-14 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          aria-label="Open menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+      {/* Mobile Top Header (Hidden on /chat to keep single unified top bar) */}
+      {!isChat && (
+        <header className="fixed top-0 inset-x-0 z-30 flex h-14 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 text-white shadow-xs dark:bg-zinc-800 dark:text-zinc-100">
-            <Sparkles className="h-4 w-4" />
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-900 text-white shadow-xs dark:bg-zinc-800 dark:text-zinc-100">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm tracking-tight">
+              phryvos k9
+            </span>
+            <span className="text-zinc-300 dark:text-zinc-700">/</span>
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{currentNav.label}</span>
           </div>
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm tracking-tight">
-            phryvos k9
-          </span>
-          <span className="text-zinc-300 dark:text-zinc-700">/</span>
-          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{currentNav.label}</span>
-        </div>
 
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setCommandPaletteOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            title="Search & Commands (Ctrl+K)"
-            aria-label="Open Command Palette"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setShortcutsModalOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            title="Shortcuts (?)"
-            aria-label="Keyboard Shortcuts"
-          >
-            <Keyboard className="h-4 w-4" />
-          </button>
-          <ThemeToggle />
-          <button
-            onClick={lock}
-            disabled={locking}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            title="Lock Vault (Ctrl+Shift+L)"
-            aria-label="Lock Vault"
-          >
-            <Lock className="h-4 w-4" />
-          </button>
-        </div>
-      </header>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+              title="Search & Commands (Ctrl+K)"
+              aria-label="Open Command Palette"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setShortcutsModalOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+              title="Shortcuts (?)"
+              aria-label="Keyboard Shortcuts"
+            >
+              <Keyboard className="h-4 w-4" />
+            </button>
+            <ThemeToggle />
+            <button
+              onClick={lock}
+              disabled={locking}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+              title="Lock Vault (Ctrl+Shift+L)"
+              aria-label="Lock Vault"
+            >
+              <Lock className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Mobile Drawer Backdrop */}
       {mobileOpen && (
@@ -471,7 +479,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden pt-14 md:pt-0 bg-white dark:bg-zinc-950">
+      <main className={`flex-1 min-w-0 flex flex-col h-full overflow-hidden ${isChat ? "pt-0" : "pt-14 md:pt-0"} bg-white dark:bg-zinc-950`}>
         {children}
       </main>
 

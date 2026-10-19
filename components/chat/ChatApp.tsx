@@ -30,6 +30,7 @@ import {
   ImagePlus,
   ListChecks,
   Loader2,
+  Menu,
   MessageSquare,
   PanelLeft,
   Pencil,
@@ -70,7 +71,8 @@ import { MorningApprovalsFeed } from "./MorningApprovalsFeed";
 import { WidgetRegistry } from "@/components/extensions/WidgetRegistry";
 import type { StepEvt, ApprovalReq } from "./types";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { ModeAndEffortBar } from "./ModeAndEffortBar";
+import { TokenRingGauge } from "./TokenRingGauge";
+import { ModeAndEffortMenu } from "./ModeAndEffortMenu";
 import { ApprovalDialog } from "./ApprovalDialog";
 import { MessageRow, textOf } from "./MessageRow";
 import { EditBox } from "./EditBox";
@@ -636,176 +638,151 @@ export function ChatApp() {
 
       {/* Main Chat View */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-zinc-950">
-        {/* Chat Header */}
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-3 md:px-4 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm">
-          <div className="flex items-center gap-2 min-w-0">
+        {/* Single Consolidated Chat Header */}
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-2 sm:px-3 md:px-4 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm gap-1.5 sm:gap-2">
+          {/* Left section: Navigation & History controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            {/* Mobile Main Menu Drawer trigger */}
             <button
-              onClick={() => {
-                if (typeof window !== "undefined" && window.innerWidth < 768) {
-                  setMobileRailOpen(true);
-                } else {
-                  setDesktopRailOpen((p) => !p);
-                }
-              }}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition"
+              onClick={() => window.dispatchEvent(new CustomEvent("phryvos:open-menu"))}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0"
+              title="Open Navigation Menu"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+
+            {/* Mobile Chat History trigger */}
+            <button
+              onClick={() => setMobileRailOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0"
+              title="Chat History"
+              aria-label="Chat History"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+
+            {/* Desktop Chat History toggle */}
+            <button
+              onClick={() => setDesktopRailOpen((p) => !p)}
+              className="hidden md:flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition shrink-0"
               title="Toggle chat history"
               aria-label="Toggle chat history"
             >
               <PanelLeft className="h-4 w-4" />
-              <span className="hidden xs:inline">Chats</span>
+              <span className="hidden lg:inline">Chats</span>
             </button>
-            <span className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+
+            {/* Active Session Title */}
+            <span className="hidden sm:inline truncate text-xs md:text-sm font-semibold text-zinc-800 dark:text-zinc-100 max-w-[100px] md:max-w-[180px]">
               {activeSession ? activeSession.title || "New chat" : "AI Assistant"}
             </span>
+
+            {/* Model & Provider Selector */}
+            <div className="flex items-center gap-1 min-w-0">
+              {providers.length > 1 && (
+                <select
+                  value={String(providerId)}
+                  onChange={(e) =>
+                    pickProvider(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                  className="h-8 max-w-[85px] sm:max-w-[120px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                  title="Select Provider"
+                >
+                  <option value="">No provider</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {modelOptions.length > 0 ? (
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="h-8 max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                  title="Model"
+                >
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="model id…"
+                  className="h-8 w-24 sm:w-32 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                />
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Context Window Token Gauge */}
+          {/* Right section: Tokens ring gauge, compact button, retry, governance & widgets */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Circular Token Gauge Ring with tap/click Popover */}
             {active && messages.length > 0 && (
-              <div
-                className={`hidden sm:flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition-all ${
-                  contextStats.percent > 75
-                    ? "border-red-300 bg-red-50/80 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
-                    : contextStats.percent > 50
-                    ? "border-amber-300 bg-amber-50/80 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
-                    : "border-zinc-200 bg-zinc-50/80 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400"
-                }`}
-                title={`Context Usage: ~${contextStats.estTokens.toLocaleString()} / ${contextStats.maxTokens.toLocaleString()} tokens (${contextStats.percent}% full). ${
-                  contextStats.percent > 70
-                    ? "High context usage! Compaction recommended to save tokens & prevent slowdown."
-                    : "Context window healthy."
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <Zap
-                    className={`h-3 w-3 ${
-                      contextStats.percent > 75
-                        ? "text-red-500 animate-pulse"
-                        : contextStats.percent > 50
-                        ? "text-amber-500"
-                        : "text-emerald-500"
-                    }`}
-                  />
-                  <span className="font-mono text-[11px] font-medium">
-                    {contextStats.estTokens.toLocaleString()} tok
-                  </span>
-                </div>
-                {/* Mini Visual Gauge Bar */}
-                <div className="h-1.5 w-10 sm:w-12 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      contextStats.percent > 75
-                        ? "bg-red-500"
-                        : contextStats.percent > 50
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                    }`}
-                    style={{ width: `${contextStats.percent}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-mono opacity-80">{contextStats.percent}%</span>
-              </div>
+              <TokenRingGauge
+                estTokens={contextStats.estTokens}
+                maxTokens={contextStats.maxTokens}
+                percent={contextStats.percent}
+                onCompact={handleCompact}
+                canCompact={Boolean(active && messages.length >= 2 && !streaming)}
+                compacting={compacting}
+              />
             )}
 
-            {/* Upgraded Compaction Button */}
+            {/* Compact Icon Button (Small circular, no advisory badge) */}
             {active && messages.length >= 2 && !streaming && (
               <button
                 onClick={handleCompact}
                 disabled={compacting}
-                className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
-                  contextStats.percent > 70
-                    ? "border-amber-400 bg-amber-50 text-amber-800 shadow-xs ring-2 ring-amber-400/30 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-500/30"
-                    : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                } disabled:opacity-50`}
-                title={
-                  contextStats.percent > 70
-                    ? "Context is high! Compact now to summarize conversation and keep replies fast."
-                    : "Compact conversation history to save tokens and keep chat fast"
-                }
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition disabled:opacity-50"
+                title="Compact conversation history"
+                aria-label="Compact conversation"
               >
                 {compacting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
                 ) : (
-                  <Zap
-                    className={`h-3.5 w-3.5 ${
-                      contextStats.percent > 70 ? "text-amber-600 dark:text-amber-400 animate-pulse" : "text-amber-500"
-                    }`}
-                  />
-                )}
-                <span>{compacting ? "Compacting…" : "Compact"}</span>
-                {contextStats.percent > 70 && !compacting && (
-                  <span className="hidden md:inline rounded bg-amber-200/80 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-800 dark:text-amber-100">
-                    Advised
-                  </span>
+                  <Zap className="h-3.5 w-3.5 text-amber-500" />
                 )}
               </button>
             )}
 
-            <select
-              value={String(providerId)}
-              onChange={(e) =>
-                pickProvider(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
-              title="Select Provider"
-            >
-              <option value="">No provider</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
-            {modelOptions.length > 0 ? (
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="h-8 max-w-[130px] md:max-w-[180px] rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
-                title="Model"
-              >
-                {modelOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="model id…"
-                className="h-8 w-28 md:w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
-              />
-            )}
-
+            {/* Retry Button */}
             {!streaming && lastMsg?.role === "assistant" && (
               <button
                 onClick={() => send({ regenerate: true })}
-                className="flex h-8 items-center gap-1 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition"
                 title="Regenerate last reply"
+                aria-label="Retry"
               >
-                <RefreshCw className="h-3 w-3" />
-                <span className="hidden sm:inline">Retry</span>
+                <RefreshCw className="h-3.5 w-3.5" />
               </button>
             )}
 
+            {/* Governance Circular Button */}
             <button
               onClick={() => setMorningFeedOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-2.5 text-xs font-medium text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300 transition cursor-pointer"
-              title="Morning Approvals Feed & Daemon Governance"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-purple-200 bg-purple-50/70 text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300 transition cursor-pointer shadow-2xs active:scale-95"
+              title="Morning Approvals Feed & Governance"
+              aria-label="Governance"
             >
               <ShieldCheck className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-              <span className="hidden sm:inline">Governance</span>
             </button>
 
+            {/* Widgets Circular Button */}
             <button
               onClick={() => setWidgetRegistryOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 transition cursor-pointer"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-850 transition cursor-pointer shadow-2xs active:scale-95"
               title="Safe Extensions & Widget Registry"
+              aria-label="Widgets"
             >
               <Boxes className="h-3.5 w-3.5 text-indigo-500" />
-              <span className="hidden sm:inline">Widgets</span>
             </button>
           </div>
         </div>
@@ -948,15 +925,6 @@ export function ChatApp() {
               />
             )}
 
-            {/* AI Mode & Effort Selector Bar */}
-            <ModeAndEffortBar
-              mode={selectedMode}
-              onModeChange={handleModeChange}
-              effort={selectedEffort}
-              onEffortChange={handleEffortChange}
-              disabled={streaming}
-            />
-
             {attach && attach.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attach.map((p, i) => (
@@ -979,7 +947,7 @@ export function ChatApp() {
             )}
 
             {/* Pill Container */}
-            <div className="flex items-end gap-2 rounded-3xl border border-zinc-300 bg-white p-2 shadow-xs transition-all focus-within:border-zinc-400 focus-within:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-end gap-1.5 sm:gap-2 rounded-3xl border border-zinc-300 bg-white p-2 shadow-xs transition-all focus-within:border-zinc-400 focus-within:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
               <input
                 ref={fileRef}
                 type="file"
@@ -991,6 +959,7 @@ export function ChatApp() {
                   e.target.value = "";
                 }}
               />
+              {/* Attach Images */}
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
@@ -999,6 +968,15 @@ export function ChatApp() {
               >
                 <ImagePlus className="h-4 w-4" />
               </button>
+
+              {/* AI Modes & Effort Plus (+) Action Menu */}
+              <ModeAndEffortMenu
+                mode={selectedMode}
+                onModeChange={handleModeChange}
+                effort={selectedEffort}
+                onEffortChange={handleEffortChange}
+                disabled={streaming}
+              />
 
               <textarea
                 ref={textareaRef}

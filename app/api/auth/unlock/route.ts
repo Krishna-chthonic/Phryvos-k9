@@ -1,3 +1,9 @@
+/**
+ * Vault unlock route with scrypt key derivation and duress decoy protection.
+ *
+ * Importers/callers: Frontend unlock form, AppShell auto-lock handler
+ * Affected API: POST /api/auth/unlock
+ */
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/client";
@@ -11,10 +17,15 @@ import {
 } from "@/lib/session/throttle";
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
+import { initDecoyVault } from "@/lib/dal/duress-vault";
+import { randomBytes } from "node:crypto";
 
-const UnlockBody = z.object({ password: z.string().min(1) });
+const UnlockBody = z.object({
+  password: z.string().min(1),
+  pin: z.string().optional(),
+});
 
-/** Verify the vault password and open an idle-TTL session. */
+/** Verify the vault password/PIN and open an idle-TTL session. */
 export async function POST(req: Request) {
   try {
     assertNotThrottled("unlock");
@@ -24,6 +35,7 @@ export async function POST(req: Request) {
       .get() as
       | { kdf: string; salt: Buffer; verifier: Buffer }
       | undefined;
+
     if (!row) {
       return Response.json(
         {
@@ -50,7 +62,27 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!checkPassword(parsed.data.password, row.salt, row.verifier)) {
+    const passwordAttempt = parsed.data.pin || parsed.data.password;
+
+    // Duress PIN Check (if set up)
+    const duressPin = kvGet("duress_pin");
+    if (duressPin && passwordAttempt === duressPin) {
+      await initDecoyVault();
+      const decoyKey = randomBytes(32);
+      const decoyToken = createSession(decoyKey, 5 * 60_000);
+      const cookieStore = await cookies();
+      cookieStore.set(SESSION_COOKIE, decoyToken, sessionCookieOptions(5 * 60_000));
+      return Response.json({
+        ok: true,
+        state: "unlocked",
+        vaultType: "decoy",
+        warning: "Duress mode: Decoy vault active",
+        auto_lock_minutes: 5,
+      });
+    }
+
+    // Verify Master Password using Scrypt
+    if (!checkPassword(passwordAttempt, row.salt, row.verifier)) {
       recordFail("unlock");
       return Response.json(
         { error: { code: "invalid_password", message: "Wrong password." } },
@@ -58,7 +90,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const { masterKey } = splitMaster(derive(parsed.data.password, row.salt));
+    // Derive the real AES-256 master key for decrypting files
+    const { masterKey } = splitMaster(derive(passwordAttempt, row.salt));
     const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
     const ttlMs = autoLockMinutes * 60_000;
     const now = Date.now();
@@ -72,6 +105,7 @@ export async function POST(req: Request) {
     return Response.json({
       ok: true,
       state: "unlocked",
+      vaultType: "real",
       auto_lock_minutes: autoLockMinutes,
     });
   } catch (e) {

@@ -1,28 +1,198 @@
-@import "tailwindcss";
+/**
+ * Global CSS with Tailwind v3 directives.
+ * Uses @tailwind base/components/utilities (not @import "tailwindcss" v4 syntax).
+ * Pinned to Tailwind v3 for Termux/ARM64 compatibility.
+ *
+ * Importers/callers: app/layout.tsx (imported in root layout)
+ * Affected API: PostCSS pipeline via tailwindcss@3.4.13 + autoprefixer
+ * Data schemas if any: CSS custom properties for theming (--background, --foreground, etc.)
+ * User instruction verbatim: "phryvos-k8 UI pins Tailwind v3 on Termux; v4's native engine can't run on-device"
+ *
+ * Phase 2: Extended semantic color tokens per DESIGN_SYSTEM.md
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #18181b;
+  /* Core semantic colors */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+  --radius: 0.5rem;
+
+  /* Extended semantic tokens (Phase 2) */
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 98%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 98%;
+  --info: 199 89% 48%;
+  --info-foreground: 0 0% 98%;
+
+  /* Vault-specific states */
+  --vault-locked: 0 84.2% 60.2%;
+  --vault-unlocked: 142 76% 36%;
+  --vault-decoy: 38 92% 50%;
+
+  /* AI streaming states */
+  --ai-thinking: 142 76% 36%;
+  --ai-streaming: 142 76% 36%;
+  --ai-approval: 38 92% 50%;
+  --ai-error: 0 84.2% 60.2%;
+
+  /* Code/Editor syntax */
+  --code-bg: 240 10% 3.9%;
+  --code-fg: 0 0% 98%;
+  --code-comment: 240 5% 64.9%;
+  --code-keyword: 263 70% 60%;
+  --code-string: 142 76% 45%;
+  --code-number: 38 92% 55%;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
+  /* Core semantic colors */
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+
+  /* Extended semantic tokens (Phase 2) */
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 98%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 98%;
+  --info: 199 89% 48%;
+  --info-foreground: 0 0% 98%;
+
+  /* Vault-specific states */
+  --vault-locked: 0 62.8% 30.6%;
+  --vault-unlocked: 142 76% 36%;
+  --vault-decoy: 38 92% 50%;
+
+  /* AI streaming states */
+  --ai-thinking: 142 76% 36%;
+  --ai-streaming: 142 76% 36%;
+  --ai-approval: 38 92% 50%;
+  --ai-error: 0 62.8% 30.6%;
+
+  /* Code/Editor syntax */
+  --code-bg: 240 10% 3.9%;
+  --code-fg: 0 0% 98%;
+  --code-comment: 240 5% 64.9%;
+  --code-keyword: 263 70% 60%;
+  --code-string: 142 76% 45%;
+  --code-number: 38 92% 55%;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  border-color: hsl(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Focus visible styles */
+:focus-visible {
+  outline: none;
+  ring: 2px solid hsl(var(--ring));
+  ring-offset: 2px;
+  ring-offset-background: hsl(var(--background));
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Selection styling */
+::selection {
+  background: hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary-foreground));
+}
+
+/* Utility: text balance for headlines */
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Utility: prevent text selection */
+.select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Utility: smooth scroll for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 

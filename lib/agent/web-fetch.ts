@@ -7,6 +7,51 @@
  * User instruction verbatim: "5. aur ai ke paas kuch skills plugins bhi hone chahiye jo ki important hai like web search, web fetch, etc."
  */
 
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().trim();
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host === "0.0.0.0" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "[::1]"
+  ) {
+    return true;
+  }
+
+  // IPv4 range checks
+  const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = host.match(ipv4Regex);
+  if (match) {
+    const [, o1, o2] = match.map(Number);
+    if (o1 === 10) return true; // 10.0.0.0/8
+    if (o1 === 127) return true; // 127.0.0.0/8 loopback
+    if (o1 === 172 && o2 >= 16 && o2 <= 31) return true; // 172.16.0.0/12
+    if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16
+    if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 (link-local, cloud metadata)
+    if (o1 === 0) return true; // 0.0.0.0/8
+    if (o1 === 100 && o2 >= 64 && o2 <= 127) return true; // 100.64.0.0/10 Carrier-grade NAT
+  }
+
+  // IPv6 checks
+  if (host.startsWith("[") && host.endsWith("]")) {
+    const rawIpv6 = host.slice(1, -1).toLowerCase();
+    if (
+      rawIpv6 === "::1" ||
+      rawIpv6.startsWith("fe80:") ||
+      rawIpv6.startsWith("fc00:") ||
+      rawIpv6.startsWith("fd00:")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export async function performWebFetch(targetUrl: string, maxChars = 15_000): Promise<string> {
   const url = targetUrl.trim();
   if (!url) return "URL cannot be empty.";
@@ -15,18 +60,47 @@ export async function performWebFetch(targetUrl: string, maxChars = 15_000): Pro
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(12_000),
-      redirect: "follow",
-    });
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "Security Error: Only http and https protocols are permitted.";
+    }
 
-    if (!res.ok) {
-      return `Failed to fetch URL (HTTP ${res.status} ${res.statusText}).`;
+    if (isPrivateOrLocalHost(parsed.hostname)) {
+      return `Security Error: SSRF Protection blocked access to private/internal network target (${parsed.hostname}).`;
+    }
+
+    let currentUrl = url;
+    let hops = 0;
+    let res: Response | null = null;
+
+    while (hops < 5) {
+      const u = new URL(currentUrl);
+      if (isPrivateOrLocalHost(u.hostname)) {
+        return `Security Error: SSRF Protection blocked redirect to private/internal host (${u.hostname}).`;
+      }
+
+      res = await fetch(currentUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(12_000),
+        redirect: "manual",
+      });
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        if (!location) break;
+        currentUrl = new URL(location, currentUrl).toString();
+        hops++;
+      } else {
+        break;
+      }
+    }
+
+    if (!res || !res.ok) {
+      return `Failed to fetch URL (HTTP ${res?.status ?? "unknown"} ${res?.statusText ?? ""}).`;
     }
 
     const contentType = res.headers.get("content-type") || "";

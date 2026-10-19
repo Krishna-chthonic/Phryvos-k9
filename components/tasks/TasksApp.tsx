@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { Plus, Columns3, GanttChart as GanttIcon, List } from "lucide-react";
+import { Plus, Columns3, GanttChart as GanttIcon, List, Network } from "lucide-react";
 import type { TaskRow } from "@/lib/tracking-service";
 import { trackingApi, ApiError } from "@/lib/tracking-client";
 import { KanbanBoard } from "./KanbanColumn";
@@ -15,7 +15,12 @@ const GanttView = dynamic(() => import("./GanttView").then((m) => m.GanttChart),
   loading: () => <div className="p-8 text-sm text-zinc-400">Loading Gantt…</div>,
 });
 
-type View = "board" | "gantt" | "list";
+const DagGraphView = dynamic(() => import("./DagGraphView").then((m) => m.DagGraphView), {
+  ssr: false,
+  loading: () => <div className="p-8 text-sm text-zinc-400">Loading CPM Graph…</div>,
+});
+
+type View = "board" | "gantt" | "list" | "cpm";
 
 export function TasksApp() {
   const [view, setView] = React.useState<View>("board");
@@ -124,8 +129,20 @@ export function TasksApp() {
   ];
   for (const c of columns) c.tasks = filtered.filter((t) => t.status === c.status);
 
-  if (loading)
-    return <div className="p-10 text-sm text-zinc-400">Loading tasks…</div>;
+  const taskDagNodes = React.useMemo(() => {
+    if (filtered.length === 0) return undefined;
+    const prereqMap: Record<number, string[]> = {};
+    for (const [blocker, blocked] of depPairs) {
+      (prereqMap[blocked] ??= []).push(String(blocker));
+    }
+    return filtered.map((t) => ({
+      id: String(t.id),
+      name: t.title,
+      durationHours: Math.max(2, (t.priority + 1) * 3),
+      progressPct: t.status === "done" ? 100 : t.status === "doing" ? 50 : 0,
+      prerequisites: prereqMap[t.id] ?? [],
+    }));
+  }, [filtered, depPairs]);
 
   return (
     <div className="flex h-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
@@ -133,7 +150,7 @@ export function TasksApp() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tasks</h1>
           <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/70 dark:bg-zinc-900 p-0.5">
-            {(["board", "gantt", "list"] as View[]).map((v) => (
+            {(["board", "gantt", "cpm", "list"] as View[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -145,8 +162,9 @@ export function TasksApp() {
               >
                 {v === "board" && <Columns3 className="h-3 w-3" />}
                 {v === "gantt" && <GanttIcon className="h-3 w-3" />}
+                {v === "cpm" && <Network className="h-3 w-3" />}
                 {v === "list" && <List className="h-3 w-3" />}
-                {v[0].toUpperCase() + v.slice(1)}
+                {v === "cpm" ? "CPM Graph" : v[0].toUpperCase() + v.slice(1)}
               </button>
             ))}
           </div>
@@ -220,6 +238,18 @@ export function TasksApp() {
               tasks={filtered}
               depPairs={depPairs}
               onTaskClick={(t) => setSelectedId(t.id)}
+            />
+          </div>
+        )}
+        {view === "cpm" && (
+          <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col">
+            <DagGraphView
+              initialNodes={taskDagNodes && taskDagNodes.length > 1 && depPairs.length > 0 ? taskDagNodes : undefined}
+              className="h-full w-full"
+              onSelectNode={(nodeId) => {
+                const num = Number(nodeId);
+                if (!isNaN(num)) setSelectedId(num);
+              }}
             />
           </div>
         )}

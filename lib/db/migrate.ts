@@ -28,6 +28,57 @@ export function runMigrations(db: Database.Database): void {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS fsrs_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subject_id INTEGER NOT NULL REFERENCES exam_subjects(id) ON DELETE CASCADE,
+      topic_id INTEGER REFERENCES exam_topics(id) ON DELETE SET NULL,
+      due INTEGER NOT NULL,
+      stability REAL NOT NULL DEFAULT 0,
+      difficulty REAL NOT NULL DEFAULT 0,
+      elapsed_days INTEGER NOT NULL DEFAULT 0,
+      scheduled_days REAL NOT NULL DEFAULT 0,
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      state INTEGER NOT NULL DEFAULT 0,
+      last_review INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fsrs_cards_due ON fsrs_cards(due);
+    CREATE INDEX IF NOT EXISTS idx_fsrs_cards_subject ON fsrs_cards(subject_id);
+    CREATE INDEX IF NOT EXISTS idx_fsrs_cards_topic ON fsrs_cards(topic_id);
+    CREATE TABLE IF NOT EXISTS background_jobs (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      progress_pct INTEGER NOT NULL DEFAULT 0,
+      stage TEXT,
+      payload TEXT,
+      result TEXT,
+      error TEXT,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      max_retries INTEGER NOT NULL DEFAULT 3,
+      created_at INTEGER NOT NULL,
+      started_at INTEGER,
+      completed_at INTEGER,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_background_jobs_status ON background_jobs(status);
+    CREATE TABLE IF NOT EXISTS memory_tombstones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      content_hash TEXT UNIQUE NOT NULL,
+      deleted_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_memory_tombstones_hash ON memory_tombstones(content_hash);
+    CREATE TABLE IF NOT EXISTS schema_versions (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at INTEGER NOT NULL,
+      checksum TEXT NOT NULL,
+      execution_time_ms INTEGER NOT NULL
+    );
+    INSERT OR IGNORE INTO schema_versions (version, name, applied_at, checksum, execution_time_ms)
+    VALUES (1, '0001_baseline_drizzle_and_virtual_tables', strftime('%s','now')*1000, 'baseline', 0);
   `);
   // The vault root is a materialized directory row (vault-service relies on it).
   db.prepare(

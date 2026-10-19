@@ -59,10 +59,10 @@ export function ChangePasswordPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Change Password</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Master Password</h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           Changing your password re-encrypts all vault data under the new master key.
           Sessions will be invalidated and you must re-unlock.
         </p>

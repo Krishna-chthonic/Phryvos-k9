@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, KeyRound, Plus, Star, Trash2, X } from "lucide-react";
+import { Check, KeyRound, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import { providersApi, type ProviderMeta } from "@/lib/chat-client";
 
 interface Preset {
@@ -53,6 +53,7 @@ const PRESETS: Preset[] = [
 export function ProvidersPanel() {
   const [providers, setProviders] = useState<ProviderMeta[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"openai" | "anthropic">("openai");
   const [baseUrl, setBaseUrl] = useState("");
@@ -79,6 +80,7 @@ export function ProvidersPanel() {
   }, [load]);
 
   const applyPreset = (p: Preset) => {
+    setEditingId(null);
     setShowForm(true);
     setName(p.defaultName);
     setKind(p.kind);
@@ -86,6 +88,25 @@ export function ProvidersPanel() {
     setModels(p.models);
     setApiKey("");
     setAsDefault(true);
+  };
+
+  const startEdit = (p: ProviderMeta) => {
+    setEditingId(p.id);
+    setName(p.name);
+    setKind(p.kind);
+    setBaseUrl(p.baseUrl);
+    setModels(p.models.join(", "));
+    setApiKey("");
+    setAsDefault(p.isDefault);
+    setShowForm(true);
+    setErr(null);
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setApiKey("");
+    setErr(null);
   };
 
   const save = async () => {
@@ -96,22 +117,35 @@ export function ProvidersPanel() {
     setSaving(true);
     setErr(null);
     try {
-      await providersApi.create({
-        name: name.trim(),
-        kind,
-        baseUrl: baseUrl.trim(),
-        apiKey: apiKey || undefined,
-        models: models
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        isDefault: asDefault,
-      });
-      setShowForm(false);
-      setApiKey("");
+      if (editingId !== null) {
+        await providersApi.patch(editingId, {
+          name: name.trim(),
+          kind,
+          baseUrl: baseUrl.trim(),
+          apiKey: apiKey || undefined,
+          models: models
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          isDefault: asDefault,
+        });
+      } else {
+        await providersApi.create({
+          name: name.trim(),
+          kind,
+          baseUrl: baseUrl.trim(),
+          apiKey: apiKey || undefined,
+          models: models
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          isDefault: asDefault,
+        });
+      }
+      cancelForm();
       await load();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed to add provider");
+      setErr(e instanceof Error ? e.message : "Failed to save provider");
     } finally {
       setSaving(false);
     }
@@ -155,17 +189,23 @@ export function ProvidersPanel() {
     "h-8 w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-2 text-xs outline-none focus:border-zinc-500 dark:focus:border-zinc-600";
 
   return (
-    <section>
+    <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">AI providers</h2>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">AI Providers</h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
             Link any OpenAI-compatible or Anthropic endpoint. Keys are encrypted in the
             vault; chats pick a provider and model per session.
           </p>
         </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (showForm) cancelForm();
+            else {
+              setEditingId(null);
+              setShowForm(true);
+            }
+          }}
           className="flex h-8 items-center gap-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 text-xs text-white dark:text-zinc-100 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -173,20 +213,40 @@ export function ProvidersPanel() {
         </button>
       </div>
 
-      {showForm && (
-        <div className="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            <span className="mr-1 self-center text-[11px] text-zinc-400 dark:text-zinc-500">Presets:</span>
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p)}
-                className="rounded-full border border-zinc-300 dark:border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                {p.label}
-              </button>
-            ))}
+      {err && !showForm && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400">
+          <div className="flex items-center gap-1.5">
+            <X className="h-3.5 w-3.5 shrink-0" />
+            <span>{err}</span>
           </div>
+          <button onClick={() => setErr(null)} className="text-zinc-400 hover:text-zinc-600">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="mb-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+              {editingId ? "Edit AI Provider" : "Add AI Provider"}
+            </span>
+            {!editingId && (
+              <div className="flex flex-wrap gap-1.5">
+                <span className="mr-1 self-center text-[11px] text-zinc-400 dark:text-zinc-500">Presets:</span>
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    onClick={() => applyPreset(p)}
+                    className="rounded-full border border-zinc-300 dark:border-zinc-700 px-2.5 py-0.5 text-[11px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
               Name
@@ -218,12 +278,12 @@ export function ProvidersPanel() {
               />
             </label>
             <label className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              API key
+              API key {editingId ? "(leave blank to keep existing key)" : "(optional for local LLMs)"}
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-…"
+                placeholder={editingId ? "••••••••" : "sk-…"}
                 className={input + " mt-1"}
               />
             </label>
@@ -254,14 +314,23 @@ export function ProvidersPanel() {
             ) : (
               <span />
             )}
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex h-7 items-center gap-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 text-xs text-white dark:text-zinc-100 transition-colors disabled:opacity-50"
-            >
-              <KeyRound className="h-3 w-3" />
-              {saving ? "Saving…" : "Save provider"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={cancelForm}
+                className="h-7 rounded-md border border-zinc-200 px-3 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="flex h-7 items-center gap-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 px-3 text-xs text-white dark:text-zinc-100 transition-colors disabled:opacity-50"
+              >
+                <KeyRound className="h-3 w-3" />
+                {saving ? "Saving…" : editingId ? "Save changes" : "Save provider"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -319,6 +388,13 @@ export function ProvidersPanel() {
                   </div>
                 )}
               </div>
+              <button
+                onClick={() => startEdit(p)}
+                title="Edit provider"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 transition-colors"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
               <button
                 onClick={() => test(p.id)}
                 disabled={t?.busy}

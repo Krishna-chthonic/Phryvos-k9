@@ -1,3 +1,11 @@
+/**
+ * Vault setup route with optional duress PIN.
+ *
+ * Importers/callers: Frontend setup form
+ * Affected API: POST /api/auth/setup - accepts password and optional duress PIN
+ * Data schemas: SetupBody (password, optional duressPin)
+ * User instruction verbatim: "Duress Ghost Vault & isolated decoy database (vault_decoy.db)"
+ */
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/client";
@@ -8,14 +16,17 @@ import { sessionCookieOptions } from "@/lib/session/cookie";
 import { ThrottleError, assertNotThrottled } from "@/lib/session/throttle";
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
+import { setupVault } from "@/lib/dal/duress-vault";
 
 const SetupBody = z.object({
   password: z.string().min(8, "Password must be at least 8 characters."),
+  duressPin: z.string().optional(), // Optional duress PIN for decoy vault
 });
 
 /**
  * First-run only: create the vault password (scrypt → master key + verifier),
  * seed defaults, and open the first session. 409 if a password already exists.
+ * Optionally accepts a duress PIN for the decoy vault.
  */
 export async function POST(req: Request) {
   try {
@@ -47,20 +58,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const salt = newSalt();
-    const { masterKey, verifier } = splitMaster(
-      derive(parsed.data.password, salt),
-    );
-    const now = Date.now();
-    db.prepare(
-      "INSERT INTO auth (id, kdf, salt, verifier, created_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(1, KDF_ID, salt, verifier, now);
+    // Use the new setupVault function that supports duress PIN
+    await setupVault(parsed.data.password, parsed.data.duressPin);
 
     kvSet("system_prompt", DEFAULT_SYSTEM_PROMPT);
     kvSet("auto_lock_minutes", "30");
 
+    // Create session after setup
+    const salt = newSalt();
+    const { masterKey } = splitMaster(derive(parsed.data.password, salt));
     const ttlMs = 30 * 60_000;
     const token = createSession(masterKey, ttlMs);
+    const now = Date.now();
     db.prepare(
       "INSERT INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)",
     ).run(token, now, now + ttlMs);

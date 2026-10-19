@@ -22,7 +22,15 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  const body = Body.safeParse(await req.json().catch(() => null));
+  const json = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  if (json && typeof json.baseUrl === "string") {
+    let u = json.baseUrl.trim();
+    if (u && !/^https?:\/\//i.test(u)) {
+      u = (u.startsWith("localhost") || u.startsWith("127.0.0.1") ? "http://" : "https://") + u;
+    }
+    json.baseUrl = u;
+  }
+  const body = Body.safeParse(json);
   if (!body.success)
     return Response.json(
       { error: { code: "invalid_body", message: body.error.issues[0]?.message ?? "Bad body" } },

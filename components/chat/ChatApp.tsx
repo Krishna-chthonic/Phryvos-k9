@@ -8,9 +8,11 @@
  */
 "use client";
 
-import {
+import React, {
+  memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -31,22 +33,22 @@ import {
   MessageSquare,
   PanelLeft,
   Pencil,
+  PenTool,
   Plus,
   RefreshCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
+  Boxes,
   Sparkles,
   Square,
   Target,
+  Terminal,
   Trash2,
   Wrench,
   X,
   Zap,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import {
   approvalsApi,
   chatApi,
@@ -56,25 +58,24 @@ import {
   type ProviderMeta,
 } from "@/lib/chat-client";
 import type { UnifiedPart } from "@/lib/ai/types";
+import {
+  EFFORT_PRESETS,
+  MODE_PRESETS,
+  type EffortLevel,
+  type AiMode,
+} from "@/lib/ai/modes-and-effort";
+import { ArtifactDrawer, type ArtifactItem } from "./ArtifactDrawer";
+import { CitationCables, registerMonacoEditor, type Citation } from "./CitationCables";
+import { MorningApprovalsFeed } from "./MorningApprovalsFeed";
+import { WidgetRegistry } from "@/components/extensions/WidgetRegistry";
+import type { StepEvt, ApprovalReq } from "./types";
+import { MarkdownRenderer } from "./MarkdownRenderer";
+import { ModeAndEffortBar } from "./ModeAndEffortBar";
+import { ApprovalDialog } from "./ApprovalDialog";
+import { MessageRow, textOf } from "./MessageRow";
+import { EditBox } from "./EditBox";
 
 /* ---------------------------------------------------------------- helpers */
-
-function textOf(content: string | UnifiedPart[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((p) => p.type === "text")
-    .map((p) => p.text ?? "")
-    .join("");
-}
-
-function imagesOf(
-  content: string | UnifiedPart[],
-): Array<{ b64: string; mime: string }> {
-  if (typeof content === "string") return [];
-  return content
-    .filter((p) => p.type === "image" && p.dataBase64)
-    .map((p) => ({ b64: p.dataBase64!, mime: p.mediaType ?? "image/png" }));
-}
 
 function when(ms: number): string {
   const d = Date.now() - ms;
@@ -82,24 +83,6 @@ function when(ms: number): string {
   if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
   if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
   return new Date(ms).toLocaleDateString();
-}
-
-/** Live tool execution reported by the SSE `step` event. */
-interface StepEvt {
-  step: number;
-  toolCallId: string;
-  tool: string;
-  args: Record<string, unknown>;
-  result: string;
-  approval?: string;
-}
-
-/** Destructive tool awaiting the user — the SSE `approval` event. */
-interface ApprovalReq {
-  approvalId: string;
-  tool: string;
-  args: Record<string, unknown>;
-  description: string;
 }
 
 /* ---------------------------------------------------------------- suggestions */
@@ -127,330 +110,8 @@ const SUGGESTIONS = [
   },
 ];
 
-/* ---------------------------------------------------------------- markdown */
 
-function Markdown({ children }: { children: string }) {
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const handleCopyCode = (codeText: string) => {
-    navigator.clipboard.writeText(codeText);
-    setCopiedCode(codeText);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  return (
-    <div className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-100 space-y-2">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
-          pre: ({ children }) => {
-            return (
-              <div className="relative group my-3 overflow-hidden rounded-xl bg-zinc-900 text-zinc-100 shadow-md border border-zinc-800">
-                <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/80 border-b border-zinc-700/50 text-[11px] text-zinc-400">
-                  <span>code</span>
-                  <button
-                    onClick={() => {
-                      const codeEl = (children as React.ReactElement<{ children?: unknown }>)?.props?.children;
-                      if (typeof codeEl === "string") handleCopyCode(codeEl);
-                    }}
-                    className="flex items-center gap-1 hover:text-zinc-200 transition"
-                  >
-                    {copiedCode ? (
-                      <>
-                        <Check className="h-3 w-3 text-emerald-400" />
-                        <span className="text-emerald-400">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <pre className="overflow-x-auto p-3 text-xs font-mono leading-normal">
-                  {children}
-                </pre>
-              </div>
-            );
-          },
-          code: ({ children, className }) => {
-            const isBlock = className?.includes("language-");
-            if (isBlock) return <code>{children}</code>;
-            return (
-              <code className="rounded-md bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-200 px-1.5 py-0.5 text-xs font-mono text-zinc-800 border border-zinc-200/60 dark:border-zinc-700">
-                {children}
-              </code>
-            );
-          },
-          p: ({ children }) => <p className="leading-relaxed mb-2 last:mb-0">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc pl-5 my-2 space-y-1">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-5 my-2 space-y-1">{children}</ol>,
-          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-          h1: ({ children }) => <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mt-3 mb-1.5">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-2.5 mb-1">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mt-2 mb-1">{children}</h3>,
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              {children}
-            </a>
-          ),
-        }}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-function toolBadge(name: string): { label: string; icon: React.ComponentType<{ className?: string }> } {
-  switch (name) {
-    case "save_memory":
-      return { label: "Saved to Memory", icon: Brain };
-    case "list_memories":
-      return { label: "Recalled Memories", icon: Brain };
-    case "delete_memory":
-      return { label: "Forgot Memory", icon: Brain };
-    case "calculate":
-      return { label: "Calculated", icon: Calculator };
-    case "web_search":
-      return { label: "Web Search", icon: Search };
-    case "web_fetch":
-      return { label: "Fetched Webpage", icon: Globe };
-    default:
-      return { label: name, icon: Wrench };
-  }
-}
-
-/* ---------------------------------------------------------------- message row */
-
-function MessageRow({
-  msg,
-  streaming,
-  onEdit,
-  toolName,
-}: {
-  msg: ChatMessageDto;
-  streaming?: boolean;
-  onEdit: (msg: ChatMessageDto) => void;
-  toolName?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  if (msg.role === "tool") {
-    const badge = toolBadge(toolName ?? "tool result");
-    const Icon = badge.icon;
-    return (
-      <div className="mx-auto my-1.5 w-fit rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600 shadow-2xs dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-        <span className="inline-flex items-center gap-1 font-semibold text-zinc-700 dark:text-zinc-200">
-          <Icon className="h-3 w-3 text-indigo-500" />
-          {badge.label}
-        </span>{" "}
-        <span className="text-zinc-400">·</span> {textOf(msg.content).slice(0, 180)}
-      </div>
-    );
-  }
-
-  const user = msg.role === "user";
-  const body = textOf(msg.content);
-  const imgs = imagesOf(msg.content);
-
-  const copyText = () => {
-    navigator.clipboard.writeText(body);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div
-      className={`group flex w-full ${
-        user ? "justify-end" : "justify-start"
-      } px-3 md:px-4 py-2`}
-    >
-      <div
-        className={`relative max-w-[85%] md:max-w-[76%] rounded-2xl px-4 py-3 shadow-2xs ${
-          user
-            ? "bg-zinc-100 text-zinc-900 border border-zinc-200/80 rounded-tr-xs dark:bg-zinc-800 dark:border-zinc-700/80 dark:text-zinc-100"
-            : "bg-white text-zinc-900 border border-zinc-200/80 rounded-tl-xs shadow-2xs dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100"
-        }`}
-      >
-        {/* Images */}
-        {imgs.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {imgs.map((im, i) => (
-              <img
-                key={i}
-                src={`data:${im.mime};base64,${im.b64}`}
-                alt="attachment"
-                className="h-32 rounded-lg object-cover ring-1 ring-zinc-200"
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Content */}
-        {user ? (
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">{body}</div>
-        ) : streaming ? (
-          <div className="text-sm">
-            {body ? (
-              <Markdown>{body}</Markdown>
-            ) : (
-              <div className="flex items-center gap-2 py-1 text-zinc-400">
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-600 dark:text-zinc-300" />
-                <span className="text-xs font-medium">Thinking…</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <Markdown>{body}</Markdown>
-        )}
-
-        {/* Tool calls */}
-        {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-zinc-100 dark:border-zinc-800 pt-2">
-            {(msg.toolCalls as Array<{ name: string }>).map((tc, i) => {
-              const badge = toolBadge(tc.name);
-              const Icon = badge.icon;
-              return (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
-                >
-                  <Icon className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
-                  {badge.label}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Action icons (copy & edit) */}
-        <div
-          className={`mt-1.5 flex items-center gap-2 text-xs transition-opacity ${
-            user ? "justify-end text-zinc-400" : "text-zinc-400"
-          }`}
-        >
-          {!streaming && body && (
-            <button
-              onClick={copyText}
-              className="flex items-center gap-1 hover:text-zinc-600"
-              title="Copy message"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3 w-3 text-emerald-500" />
-                  <span className="text-[10px] text-emerald-600">Copied</span>
-                </>
-              ) : (
-                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
-              )}
-            </button>
-          )}
-
-          {user && !streaming && (
-            <button
-              onClick={() => onEdit(msg)}
-              className="flex items-center gap-1 hover:text-zinc-200"
-              title="Edit message"
-            >
-              <Pencil className="h-3 w-3 opacity-60 hover:opacity-100" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- badges */
-
-function ToolStepBadge({ s }: { s: StepEvt }) {
-  const summary =
-    s.tool === "write_file"
-      ? `→ ${String(s.args.path ?? "")}`
-      : s.tool === "delete_file" || s.tool === "create_directory"
-        ? `→ ${String(s.args.path ?? "")}`
-        : s.tool === "search_files"
-          ? `“${String(s.args.query ?? "")}”`
-          : s.tool === "data_query"
-            ? "SQL query"
-            : JSON.stringify(s.args).slice(0, 80);
-  const note =
-    s.approval === "allowed"
-      ? "approved"
-      : s.approval && s.approval !== "allowed"
-        ? s.approval.replace("_", "-")
-        : null;
-  return (
-    <div className="mx-auto my-1 flex w-fit max-w-[85%] items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-600 shadow-2xs">
-      <Wrench className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-      <span className="font-semibold text-zinc-800">{s.tool}</span>
-      <span className="max-w-xs truncate text-zinc-500">{summary}</span>
-      {note && (
-        <span
-          className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
-            note === "approved"
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-red-100 text-red-600"
-          }`}
-        >
-          {note}
-        </span>
-      )}
-      <span className="text-zinc-300">·</span>
-      <span className="max-w-xs truncate text-zinc-400">{s.result.slice(0, 100)}</span>
-    </div>
-  );
-}
-
-function ApprovalDialog({
-  approval,
-  onResolve,
-  resolving,
-}: {
-  approval: ApprovalReq;
-  onResolve: (id: string, decision: "allow" | "deny") => void;
-  resolving: boolean;
-}) {
-  return (
-    <div className="mx-auto mb-3 w-full max-w-3xl rounded-2xl border border-amber-300 bg-amber-50 p-3.5 shadow-sm">
-      <div className="flex items-start gap-3">
-        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-amber-950">
-            {approval.description}
-          </div>
-          <div className="mt-0.5 text-xs text-amber-700">
-            The AI agent wants to execute a sensitive action. Auto-denies in 5 minutes if unapproved.
-          </div>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            onClick={() => onResolve(approval.approvalId, "deny")}
-            disabled={resolving}
-            className="rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
-          >
-            Deny
-          </button>
-          <button
-            onClick={() => onResolve(approval.approvalId, "allow")}
-            disabled={resolving}
-            className="rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-40 shadow-xs"
-          >
-            {resolving ? "…" : "Allow"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ---------------------------------------------------------------- ChatApp */
 
@@ -472,8 +133,77 @@ export function ChatApp() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
+  const [desktopRailOpen, setDesktopRailOpen] = useState(true);
   const [compacting, setCompacting] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const [streamElapsed, setStreamElapsed] = useState(0);
+  const [artifact, setArtifact] = useState<ArtifactItem | null>(null);
+  const [artifactOpen, setArtifactOpen] = useState(false);
+  const [morningFeedOpen, setMorningFeedOpen] = useState(false);
+  const [widgetRegistryOpen, setWidgetRegistryOpen] = useState(false);
+  const [citations, setCitations] = useState<Citation[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [selectedMode, setSelectedMode] = useState<AiMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("phryvos_ai_mode");
+      if (saved && saved in MODE_PRESETS) return saved as AiMode;
+    }
+    return "thinking";
+  });
+
+  const [selectedEffort, setSelectedEffort] = useState<EffortLevel>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("phryvos_ai_effort");
+      if (saved && saved in EFFORT_PRESETS) return saved as EffortLevel;
+    }
+    return "medium";
+  });
+
+  const handleModeChange = useCallback((m: AiMode) => {
+    setSelectedMode(m);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("phryvos_ai_mode", m);
+    }
+  }, []);
+
+  const handleEffortChange = useCallback((eff: EffortLevel) => {
+    setSelectedEffort(eff);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("phryvos_ai_effort", eff);
+    }
+  }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (streaming) {
+      setStreamElapsed(0);
+      interval = setInterval(() => {
+        setStreamElapsed((s) => s + 1);
+      }, 1000);
+    } else {
+      setStreamElapsed(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [streaming]);
+
+  const contextStats = useMemo(() => {
+    let chars = 0;
+    for (const m of messages) {
+      if (typeof m.content === "string") chars += m.content.length;
+      else if (Array.isArray(m.content)) {
+        for (const p of m.content) {
+          if (p.type === "text" && p.text) chars += p.text.length;
+        }
+      }
+    }
+    const estTokens = Math.round(chars / 3.8);
+    const maxTokens = 32000;
+    const percent = Math.min(100, Math.round((estTokens / maxTokens) * 100));
+    return { chars, estTokens, maxTokens, percent };
+  }, [messages]);
 
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -584,6 +314,8 @@ export function ChatApp() {
       content?: string | UnifiedPart[];
       model?: string;
       regenerate?: boolean;
+      effort?: EffortLevel;
+      mode?: AiMode;
     }) => {
       if (streaming) return;
       setErr(null);
@@ -638,7 +370,11 @@ export function ChatApp() {
         }
         await chatApi.sendMessage(
           targetSessionId,
-          body,
+          {
+            ...body,
+            effort: body.effort ?? selectedEffort,
+            mode: body.mode ?? selectedMode,
+          },
           (ev, data) => {
             let d: Record<string, unknown>;
             try {
@@ -647,8 +383,41 @@ export function ChatApp() {
               return;
             }
             if (ev === "delta") setStreamText((s) => s + (d.text as string ?? ""));
-            else if (ev === "step")
-              setSteps((s) => [...s, d as unknown as StepEvt].slice(-20));
+            else if (ev === "step") {
+              const stepEvt = d as unknown as StepEvt;
+              setSteps((s) => [...s, stepEvt].slice(-20));
+              // Check if this step created a physics artifact or HTML artifact
+              if (stepEvt.tool === "render_physics_problem" && stepEvt.result) {
+                try {
+                  const result = JSON.parse(stepEvt.result);
+                  if (result.type && result.params) {
+                    const artifactItem: ArtifactItem = {
+                      id: `physics-${stepEvt.toolCallId}`,
+                      title: result.type,
+                      type: "physics",
+                      content: "",
+                      params: result.params,
+                      createdAt: Date.now(),
+                    };
+                    setArtifact(artifactItem);
+                    setArtifactOpen(true);
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              } else if (stepEvt.tool === "write_file" && typeof stepEvt.args.path === "string" && stepEvt.args.path.endsWith(".html")) {
+                // Auto-open HTML artifacts
+                const artifactItem: ArtifactItem = {
+                  id: `html-${stepEvt.toolCallId}`,
+                  title: stepEvt.args.path.split("/").pop() || "HTML Artifact",
+                  type: "html",
+                  content: typeof stepEvt.args.content === "string" ? stepEvt.args.content : "",
+                  createdAt: Date.now(),
+                };
+                setArtifact(artifactItem);
+                setArtifactOpen(true);
+              }
+            }
             else if (ev === "approval") setApproval(d as unknown as ApprovalReq);
             else if (ev === "done") setApproval(null);
             else if (ev === "error") setErr(String(d.message ?? "Provider error"));
@@ -673,7 +442,7 @@ export function ChatApp() {
         abortRef.current = null;
       }
     },
-    [active, streaming, providerId, model, providers, loadMessages],
+    [active, streaming, providerId, model, providers, loadMessages, selectedEffort, selectedMode],
   );
 
   const stop = useCallback(() => {
@@ -760,10 +529,12 @@ export function ChatApp() {
         />
       )}
 
-      {/* Session Rail (Desktop Pinned & Mobile Slide-over Drawer) */}
+      {/* Session Rail (Desktop Collapsible & Mobile Slide-over Drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-zinc-200 bg-white transition-transform duration-300 md:static md:w-64 md:translate-x-0 dark:border-zinc-800 dark:bg-zinc-950 ${
-          mobileRailOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-zinc-200 bg-white transition-all duration-300 ease-in-out md:static dark:border-zinc-800 dark:bg-zinc-950 ${
+          mobileRailOpen ? "translate-x-0 shadow-2xl w-72" : "-translate-x-full md:translate-x-0"
+        } ${
+          desktopRailOpen ? "md:w-64" : "md:w-0 md:border-r-0 md:overflow-hidden"
         }`}
       >
         <div className="flex h-14 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-3.5">
@@ -788,6 +559,13 @@ export function ChatApp() {
               className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 md:hidden"
             >
               <X className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setDesktopRailOpen(false)}
+              className="hidden md:flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+              title="Collapse chat history"
+            >
+              <PanelLeft className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -862,12 +640,19 @@ export function ChatApp() {
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-3 md:px-4 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm">
           <div className="flex items-center gap-2 min-w-0">
             <button
-              onClick={() => setMobileRailOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden"
-              title="Chat History"
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 768) {
+                  setMobileRailOpen(true);
+                } else {
+                  setDesktopRailOpen((p) => !p);
+                }
+              }}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition"
+              title="Toggle chat history"
+              aria-label="Toggle chat history"
             >
               <PanelLeft className="h-4 w-4" />
-              <span>Chats</span>
+              <span className="hidden xs:inline">Chats</span>
             </button>
             <span className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
               {activeSession ? activeSession.title || "New chat" : "AI Assistant"}
@@ -875,19 +660,84 @@ export function ChatApp() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Context Window Token Gauge */}
+            {active && messages.length > 0 && (
+              <div
+                className={`hidden sm:flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs transition-all ${
+                  contextStats.percent > 75
+                    ? "border-red-300 bg-red-50/80 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+                    : contextStats.percent > 50
+                    ? "border-amber-300 bg-amber-50/80 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "border-zinc-200 bg-zinc-50/80 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400"
+                }`}
+                title={`Context Usage: ~${contextStats.estTokens.toLocaleString()} / ${contextStats.maxTokens.toLocaleString()} tokens (${contextStats.percent}% full). ${
+                  contextStats.percent > 70
+                    ? "High context usage! Compaction recommended to save tokens & prevent slowdown."
+                    : "Context window healthy."
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Zap
+                    className={`h-3 w-3 ${
+                      contextStats.percent > 75
+                        ? "text-red-500 animate-pulse"
+                        : contextStats.percent > 50
+                        ? "text-amber-500"
+                        : "text-emerald-500"
+                    }`}
+                  />
+                  <span className="font-mono text-[11px] font-medium">
+                    {contextStats.estTokens.toLocaleString()} tok
+                  </span>
+                </div>
+                {/* Mini Visual Gauge Bar */}
+                <div className="h-1.5 w-10 sm:w-12 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      contextStats.percent > 75
+                        ? "bg-red-500"
+                        : contextStats.percent > 50
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${contextStats.percent}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-mono opacity-80">{contextStats.percent}%</span>
+              </div>
+            )}
+
+            {/* Upgraded Compaction Button */}
             {active && messages.length >= 2 && !streaming && (
               <button
                 onClick={handleCompact}
                 disabled={compacting}
-                className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition"
-                title="Compact conversation history to save tokens and keep chat fast"
+                className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition ${
+                  contextStats.percent > 70
+                    ? "border-amber-400 bg-amber-50 text-amber-800 shadow-xs ring-2 ring-amber-400/30 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-500/30"
+                    : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                } disabled:opacity-50`}
+                title={
+                  contextStats.percent > 70
+                    ? "Context is high! Compact now to summarize conversation and keep replies fast."
+                    : "Compact conversation history to save tokens and keep chat fast"
+                }
               >
                 {compacting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
                 ) : (
-                  <Zap className="h-3.5 w-3.5 text-amber-500" />
+                  <Zap
+                    className={`h-3.5 w-3.5 ${
+                      contextStats.percent > 70 ? "text-amber-600 dark:text-amber-400 animate-pulse" : "text-amber-500"
+                    }`}
+                  />
                 )}
-                <span className="hidden sm:inline">{compacting ? "Compacting…" : "Compact"}</span>
+                <span>{compacting ? "Compacting…" : "Compact"}</span>
+                {contextStats.percent > 70 && !compacting && (
+                  <span className="hidden md:inline rounded bg-amber-200/80 px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-800 dark:text-amber-100">
+                    Advised
+                  </span>
+                )}
               </button>
             )}
 
@@ -939,6 +789,24 @@ export function ChatApp() {
                 <span className="hidden sm:inline">Retry</span>
               </button>
             )}
+
+            <button
+              onClick={() => setMorningFeedOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/70 px-2.5 text-xs font-medium text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300 transition cursor-pointer"
+              title="Morning Approvals Feed & Daemon Governance"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+              <span className="hidden sm:inline">Governance</span>
+            </button>
+
+            <button
+              onClick={() => setWidgetRegistryOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 transition cursor-pointer"
+              title="Safe Extensions & Widget Registry"
+            >
+              <Boxes className="h-3.5 w-3.5 text-indigo-500" />
+              <span className="hidden sm:inline">Widgets</span>
+            </button>
           </div>
         </div>
 
@@ -953,15 +821,15 @@ export function ChatApp() {
 
         {/* Message Stream or ChatGPT / Gemini Hero Welcome */}
         <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-4 bg-white dark:bg-zinc-950">
-          {!active || (messages.length === 0 && !streamText) ? (
-            <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-4 text-center">
+          {!active && messages.length === 0 && !streamText && !streaming ? (
+            <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center px-4 text-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg ring-4 ring-zinc-100 dark:bg-zinc-800 dark:ring-zinc-800">
                 <Sparkles className="h-7 w-7 text-emerald-400" />
               </div>
               <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
                 What can I help with today?
               </h2>
-              <p className="mt-1.5 text-xs md:text-sm text-zinc-500 dark:text-zinc-400 max-w-md">
+              <p className="mt-1.5 text-xs md:text-sm text-zinc-500 dark:text-zinc-400 max-w-xl">
                 I am connected to your encrypted personal vault. I can read & write files, manage tasks, plan exams, compute math, and search the web.
               </p>
 
@@ -995,7 +863,7 @@ export function ChatApp() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto max-w-3xl px-3 md:px-0">
+            <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8">
               {/* Compaction notice banner if session was summarized */}
               {activeSession && (activeSession.summaryUntil ?? 0) > 0 && (
                 <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs dark:border-indigo-900/50 dark:bg-indigo-950/40">
@@ -1038,7 +906,7 @@ export function ChatApp() {
                   <MessageRow key={m.id} msg={m} toolName={name} onEdit={startEdit} />
                 );
               })}
-              {streamText && (
+              {(streaming || streamText || steps.length > 0) && (
                 <MessageRow
                   msg={{
                     id: "stream",
@@ -1050,13 +918,12 @@ export function ChatApp() {
                     editedAt: null,
                     createdAt: Date.now(),
                   }}
-                  streaming
+                  streaming={streaming}
+                  elapsed={streamElapsed}
+                  liveSteps={steps}
                   onEdit={() => {}}
                 />
               )}
-              {steps.map((s) => (
-                <ToolStepBadge key={s.toolCallId} s={s} />
-              ))}
               {editing && (
                 <EditBox
                   value={editing.text}
@@ -1072,7 +939,7 @@ export function ChatApp() {
 
         {/* Composer (ChatGPT/Gemini rounded pill style with ArrowUp mobile send button) */}
         <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 px-3 py-3 md:px-4">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto w-full max-w-5xl">
             {approval && (
               <ApprovalDialog
                 approval={approval}
@@ -1080,6 +947,15 @@ export function ChatApp() {
                 resolving={approving}
               />
             )}
+
+            {/* AI Mode & Effort Selector Bar */}
+            <ModeAndEffortBar
+              mode={selectedMode}
+              onModeChange={handleModeChange}
+              effort={selectedEffort}
+              onEffortChange={handleEffortChange}
+              disabled={streaming}
+            />
 
             {attach && attach.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
@@ -1172,50 +1048,57 @@ export function ChatApp() {
             </div>
           </div>
         </div>
+        {/* Citation cables overlay & Artifact drawer */}
+        <CitationCables citations={citations} containerRef={containerRef} />
+        <ArtifactDrawer
+          isOpen={artifactOpen}
+          onClose={() => setArtifactOpen(false)}
+          artifact={artifact}
+        />
+
+        {morningFeedOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xs p-4">
+            <div className="w-full max-w-2xl h-[80vh] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                  Autonomous Daemon Governance & Morning Feed
+                </span>
+                <button
+                  onClick={() => setMorningFeedOpen(false)}
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 font-bold px-2 py-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <MorningApprovalsFeed />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {widgetRegistryOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xs p-4">
+            <div className="w-full max-w-2xl h-[75vh] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                  Safe Extensions & Widget Sandbox
+                </span>
+                <button
+                  onClick={() => setWidgetRegistryOpen(false)}
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 font-bold px-2 py-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden p-3">
+                <WidgetRegistry />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ---------------------------------------------------------------- edit box */
-
-function EditBox({
-  value,
-  onChange,
-  onSave,
-  onCancel,
-  busy,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  busy: boolean;
-}) {
-  return (
-    <div className="mx-auto my-2 w-full max-w-3xl rounded-2xl border border-zinc-300 bg-white p-3 shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={3}
-        className="w-full resize-none bg-transparent text-sm text-zinc-800 dark:text-zinc-100 outline-none"
-      />
-      <div className="mt-2 flex justify-end gap-2">
-        <button
-          onClick={onCancel}
-          disabled={busy}
-          className="rounded-xl border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onSave}
-          disabled={busy || !value.trim()}
-          className="rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-40 shadow-xs dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
-          Save & resend
-        </button>
-      </div>
-    </div>
-  );
-}

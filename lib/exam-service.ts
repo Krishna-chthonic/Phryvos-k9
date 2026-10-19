@@ -9,12 +9,25 @@
  *   - app/api/study-logs/route.ts (GET/POST)
  *   - app/api/study-logs/[id]/route.ts (DELETE)
  *   - Agent tools in lib/agent/tools/goals-events.ts (exam_progress_update)
+ *   - components/exams/ExamsApp.tsx (client-side API calls)
+ *   - FSRS integration for spaced repetition review scheduling
  *
- * Data schemas: exam_subjects, exam_topics, study_logs (from lib/db/schema.ts)
+ * Data schemas: exam_subjects, exam_topics, study_logs, fsrs_cards (from lib/db/schema.ts)
  */
 
 import type Database from "better-sqlite3";
 import { gcmDecrypt, gcmEncrypt } from "./crypto/envelope";
+import {
+  FSRSCard,
+  FSRSParameters,
+  DEFAULT_FSRS_PARAMETERS,
+  ReviewResult,
+  Rating,
+  scheduleCard,
+  createFSRSCard,
+  getDueCards,
+  getUpcomingCards,
+} from "./fsrs";
 
 export interface ExamCtx {
   db: Database.Database;
@@ -387,4 +400,219 @@ function decryptStudyNotes(
   } catch {
     return null;
   }
+}
+
+// ------------------------------------------------------------ FSRS Spaced Repetition
+
+export interface FSRSRow {
+  id: number;
+  subjectId: number;
+  topicId: number | null;
+  due: number;
+  stability: number;
+  difficulty: number;
+  elapsedDays: number;
+  scheduledDays: number;
+  reps: number;
+  lapses: number;
+  state: number;
+  lastReview: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export function listFSRSCards(ctx: ExamCtx, subjectId?: number): FSRSCard[] {
+  const where = subjectId ? "WHERE subject_id = ?" : "";
+  const params = subjectId ? [subjectId] : [];
+
+  const rows = ctx.db.prepare(`
+    SELECT id, subject_id AS subjectId, topic_id AS topicId, due, stability, difficulty,
+           elapsed_days AS elapsedDays, scheduled_days AS scheduledDays, reps, lapses,
+           state, last_review AS lastReview, created_at AS createdAt, updated_at AS updatedAt
+    FROM fsrs_cards ${where}
+    ORDER BY due ASC
+  `).all(...params) as Array<Record<string, unknown>>;
+
+  return rows.map((r) => ({
+    id: r.id as number,
+    subjectId: r.subjectId as number,
+    topicId: r.topicId as number | null,
+    due: r.due as number,
+    stability: r.stability as number,
+    difficulty: r.difficulty as number,
+    elapsedDays: r.elapsedDays as number,
+    scheduledDays: r.scheduledDays as number,
+    reps: r.reps as number,
+    lapses: r.lapses as number,
+    state: r.state as number,
+    lastReview: r.lastReview as number | null,
+    createdAt: r.createdAt as number,
+    updatedAt: r.updatedAt as number,
+  }));
+}
+
+export function getFSRSCard(ctx: ExamCtx, id: number): FSRSCard | null {
+  const r = ctx.db.prepare(`
+    SELECT id, subject_id AS subjectId, topic_id AS topicId, due, stability, difficulty,
+           elapsed_days AS elapsedDays, scheduled_days AS scheduledDays, reps, lapses,
+           state, last_review AS lastReview, created_at AS createdAt, updated_at AS updatedAt
+    FROM fsrs_cards WHERE id = ?
+  `).get(id) as Record<string, unknown> | undefined;
+
+  if (!r) return null;
+  return {
+    id: r.id as number,
+    subjectId: r.subjectId as number,
+    topicId: r.topicId as number | null,
+    due: r.due as number,
+    stability: r.stability as number,
+    difficulty: r.difficulty as number,
+    elapsedDays: r.elapsedDays as number,
+    scheduledDays: r.scheduledDays as number,
+    reps: r.reps as number,
+    lapses: r.lapses as number,
+    state: r.state as number,
+    lastReview: r.lastReview as number | null,
+    createdAt: r.createdAt as number,
+    updatedAt: r.updatedAt as number,
+  };
+}
+
+export function getDueFSRSCards(ctx: ExamCtx, subjectId?: number, now: number = Date.now()): FSRSCard[] {
+  const where = subjectId ? "WHERE subject_id = ? AND due <= ?" : "WHERE due <= ?";
+  const params = subjectId ? [subjectId, now] : [now];
+
+  const rows = ctx.db.prepare(`
+    SELECT id, subject_id AS subjectId, topic_id AS topicId, due, stability, difficulty,
+           elapsed_days AS elapsedDays, scheduled_days AS scheduledDays, reps, lapses,
+           state, last_review AS lastReview, created_at AS createdAt, updated_at AS updatedAt
+    FROM fsrs_cards ${where}
+    ORDER BY due ASC
+  `).all(...params) as Array<Record<string, unknown>>;
+
+  return rows.map((r) => ({
+    id: r.id as number,
+    subjectId: r.subjectId as number,
+    topicId: r.topicId as number | null,
+    due: r.due as number,
+    stability: r.stability as number,
+    difficulty: r.difficulty as number,
+    elapsedDays: r.elapsedDays as number,
+    scheduledDays: r.scheduledDays as number,
+    reps: r.reps as number,
+    lapses: r.lapses as number,
+    state: r.state as number,
+    lastReview: r.lastReview as number | null,
+    createdAt: r.createdAt as number,
+    updatedAt: r.updatedAt as number,
+  }));
+}
+
+export function createFSRSCardForSubject(
+  ctx: ExamCtx,
+  subjectId: number,
+  topicId: number | null,
+  params: FSRSParameters = DEFAULT_FSRS_PARAMETERS,
+  now: number = Date.now()
+): FSRSCard {
+  const subject = getSubject(ctx, subjectId);
+  if (!subject) throw new ExamError("not_found", `Subject ${subjectId} not found`);
+
+  const card = createFSRSCard(subjectId, topicId, params, now);
+
+  const result = ctx.db.prepare(`
+    INSERT INTO fsrs_cards
+      (subject_id, topic_id, due, stability, difficulty, elapsed_days, scheduled_days,
+       reps, lapses, state, last_review, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    card.subjectId,
+    card.topicId,
+    card.due,
+    card.stability,
+    card.difficulty,
+    card.elapsedDays,
+    card.scheduledDays,
+    card.reps,
+    card.lapses,
+    card.state,
+    card.lastReview,
+    card.createdAt,
+    card.updatedAt,
+  );
+
+  const id = Number(result.lastInsertRowid);
+  return getFSRSCard(ctx, id)!;
+}
+
+export function reviewFSRSCard(
+  ctx: ExamCtx,
+  cardId: number,
+  rating: Rating,
+  params: FSRSParameters = DEFAULT_FSRS_PARAMETERS,
+  now: number = Date.now()
+): ReviewResult | null {
+  const card = getFSRSCard(ctx, cardId);
+  if (!card) return null;
+
+  const result = scheduleCard(card, rating, params, now);
+
+  ctx.db.prepare(`
+    UPDATE fsrs_cards
+    SET due = ?, stability = ?, difficulty = ?, elapsed_days = ?, scheduled_days = ?,
+        reps = ?, lapses = ?, state = ?, last_review = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    result.card.due,
+    result.card.stability,
+    result.card.difficulty,
+    result.card.elapsedDays,
+    result.card.scheduledDays,
+    result.card.reps,
+    result.card.lapses,
+    result.card.state,
+    result.card.lastReview,
+    result.card.updatedAt,
+    cardId,
+  );
+
+  return result;
+}
+
+export function getUpcomingFSRSReviews(
+  ctx: ExamCtx,
+  subjectId: number | undefined,
+  windowMs: number,
+  now: number = Date.now()
+): FSRSCard[] {
+  const limit = now + windowMs;
+  const where = subjectId
+    ? "WHERE subject_id = ? AND due > ? AND due <= ?"
+    : "WHERE due > ? AND due <= ?";
+  const params = subjectId ? [subjectId, now, limit] : [now, limit];
+
+  const rows = ctx.db.prepare(`
+    SELECT id, subject_id AS subjectId, topic_id AS topicId, due, stability, difficulty,
+           elapsed_days AS elapsedDays, scheduled_days AS scheduledDays, reps, lapses,
+           state, last_review AS lastReview, created_at AS createdAt, updated_at AS updatedAt
+    FROM fsrs_cards ${where}
+    ORDER BY due ASC
+  `).all(...params) as Array<Record<string, unknown>>;
+
+  return rows.map((r) => ({
+    id: r.id as number,
+    subjectId: r.subjectId as number,
+    topicId: r.topicId as number | null,
+    due: r.due as number,
+    stability: r.stability as number,
+    difficulty: r.difficulty as number,
+    elapsedDays: r.elapsedDays as number,
+    scheduledDays: r.scheduledDays as number,
+    reps: r.reps as number,
+    lapses: r.lapses as number,
+    state: r.state as number,
+    lastReview: r.lastReview as number | null,
+    createdAt: r.createdAt as number,
+    updatedAt: r.updatedAt as number,
+  }));
 }

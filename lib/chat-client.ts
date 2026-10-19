@@ -83,10 +83,15 @@ export const chatApi = {
       method: "POST",
     }).then((r) => json<{ ok: boolean; summary: string; compactedCount: number }>(r)),
 
-  /** POST a user message (or regenerate) and stream events. */
   sendMessage(
     sessionId: string,
-    body: { content?: string | UnifiedPart[]; model?: string; regenerate?: boolean },
+    body: {
+      content?: string | UnifiedPart[];
+      model?: string;
+      regenerate?: boolean;
+      effort?: "low" | "medium" | "high" | "max" | "xhigh" | "ultra";
+      mode?: "thinking" | "flash" | "research" | "coding" | "creative" | "study" | "general";
+    },
     onEvent: (event: string, data: string) => void,
     signal?: AbortSignal,
   ): Promise<void> {

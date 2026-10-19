@@ -16,18 +16,20 @@
  *   - Re-key touches encrypted columns in: ai_providers, chat_sessions,
  *     chat_messages, study_logs, files (DEK envelope only; content BLOBs untouched)
  *
- * User instruction verbatim: "continue"
+ * User instruction verbatim: "Unified DAL enforcing lock verification before any query executes"
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { derive, splitMaster, checkPassword } from "@/lib/crypto/kdf";
 import { gcmEncrypt, gcmDecrypt } from "@/lib/crypto/envelope";
 import { getDb } from "@/lib/db/client";
+import { verifySchemaIntegrity } from "@/lib/db/migration-manager";
 import { destroySession } from "@/lib/session/store";
+import { ensureVaultUnlocked, VaultLockedError } from "@/lib/dal/vault-dal";
 
 // ------------------------------------------------------------ dirs
 
@@ -61,7 +63,8 @@ export interface ExportResult {
  * File content BLOBs are stored encrypted in the DB; they travel as-is.
  * Uses shell `zip` for simplicity — acceptable for single-user local app.
  */
-export function createExportBundle(kind: "auto" | "manual" | "export"): ExportResult {
+export async function createExportBundle(kind: "auto" | "manual" | "export"): Promise<ExportResult> {
+  await ensureVaultUnlocked();
   ensureBackupsDir();
   const db = getDb();
   const now = Date.now();
@@ -75,12 +78,16 @@ export function createExportBundle(kind: "auto" | "manual" | "export"): ExportRe
   // VACUUM snapshot: creates a fresh compact DB at tmpDb
   db.backup(tmpDb);
 
+  const dbBuffer = fs.readFileSync(tmpDb);
+  const dbSha256 = createHash("sha256").update(dbBuffer).digest("hex");
+
   // Manifest
   const manifest = JSON.stringify(
     {
       kind,
       created_at: now,
       version: "1.0",
+      db_sha256: dbSha256,
       kdf_params: { name: "scrypt", N: 32768, r: 8, p: 1, len: 64 },
     },
     null,
@@ -90,7 +97,9 @@ export function createExportBundle(kind: "auto" | "manual" | "export"): ExportRe
   fs.writeFileSync(manifestPath, manifest);
 
   try {
-    execSync(`zip -j "${dest}" "${tmpDb}" "${manifestPath}"`);
+    execSync(`zip -j "${dest}" "${tmpDb}" "${manifestPath}"`, {
+      env: { ...process.env, PATH: `/usr/bin:/bin:${process.env.PATH ?? ""}` },
+    });
   } finally {
     fs.unlinkSync(tmpDb);
     fs.unlinkSync(manifestPath);
@@ -114,7 +123,8 @@ export interface BackupEntry {
   createdAt: number;
 }
 
-export function listBackups(): BackupEntry[] {
+export async function listBackups(): Promise<BackupEntry[]> {
+  await ensureVaultUnlocked();
   const db = getDb();
   const rows = db.prepare(`
     SELECT id, kind, path, size_bytes, created_at
@@ -130,7 +140,8 @@ export function listBackups(): BackupEntry[] {
   }));
 }
 
-export function deleteBackup(id: number): void {
+export async function deleteBackup(id: number): Promise<void> {
+  await ensureVaultUnlocked();
   const db = getDb();
   const row = db.prepare("SELECT path FROM backups WHERE id = ?").get(id) as
     | { path: string }
@@ -156,40 +167,105 @@ export interface RestoreResult {
  * The zip must contain a `vault.db` at its root.
  * Drops all current data and replaces it with the snapshot. Sessions are invalidated.
  */
-export function restoreBackup(backupPath: string): RestoreResult {
+export async function restoreBackup(backupPath: string): Promise<RestoreResult> {
+  await ensureVaultUnlocked();
   ensureBackupsDir();
   if (!fs.existsSync(backupPath)) throw new Error(`Backup not found: ${backupPath}`);
 
   const tmpDir = path.join(BACKUPS_DIR, `restore-tmp-${Date.now()}`);
   fs.mkdirSync(tmpDir, { recursive: true });
 
+  let preRestoreBackup: string | null = null;
+  let currentPath: string | null = null;
+
   try {
-    execSync(`unzip -o "${backupPath}" -d "${tmpDir}"`);
+    execSync(`unzip -o "${backupPath}" -d "${tmpDir}"`, {
+      env: { ...process.env, PATH: `/usr/bin:/bin:${process.env.PATH ?? ""}` },
+    });
     const restoredDbPath = path.join(tmpDir, "vault.db");
     if (!fs.existsSync(restoredDbPath)) throw new Error("Backup does not contain vault.db");
 
+    // Check manifest checksum if manifest exists
+    const manifestFiles = fs.readdirSync(tmpDir).filter((f) => f.startsWith("manifest") && f.endsWith(".json"));
+    if (manifestFiles.length > 0) {
+      try {
+        const manifestRaw = fs.readFileSync(path.join(tmpDir, manifestFiles[0]), "utf8");
+        const manifest = JSON.parse(manifestRaw) as { db_sha256?: string };
+        if (manifest.db_sha256) {
+          const actualSha256 = createHash("sha256")
+            .update(fs.readFileSync(restoredDbPath))
+            .digest("hex");
+          if (actualSha256 !== manifest.db_sha256) {
+            throw new Error("Backup corrupted: manifest checksum mismatch");
+          }
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message.includes("manifest checksum mismatch")) {
+          throw err;
+        }
+      }
+    }
+
+    // Verify integrity of candidate database before swapping
+    const candidateDb = new Database(restoredDbPath, { readonly: true });
+    try {
+      const integrityOk = verifySchemaIntegrity(candidateDb);
+      if (!integrityOk) {
+        throw new Error("Backup corrupted: restored database failed SQLite integrity check");
+      }
+    } finally {
+      candidateDb.close();
+    }
+
     const currentDb = getDb();
-    const currentPath = currentDb.name;
+    currentPath = currentDb.name;
     currentDb.close();
 
-    fs.copyFileSync(restoredDbPath, currentPath);
-    const newDb = new Database(currentPath);
-    newDb.pragma("journal_mode = WAL");
-    newDb.pragma("busy_timeout = 5000");
-    newDb.pragma("foreign_keys = ON");
+    // Preserve pre-restore safety snapshot for rollback
+    preRestoreBackup = `${currentPath}.pre-restore-${Date.now()}.bak`;
+    fs.copyFileSync(currentPath, preRestoreBackup);
 
-    // Update globalThis singleton (same pattern as lib/db/client.ts)
-    const g = globalThis as unknown as {
-      __phryvosDb?: Database.Database;
-      __phryvosDbPath?: string;
-    };
-    g.__phryvosDb = newDb;
-    g.__phryvosDbPath = currentPath;
+    try {
+      fs.copyFileSync(restoredDbPath, currentPath);
+      const newDb = new Database(currentPath);
+      newDb.pragma("journal_mode = WAL");
+      newDb.pragma("busy_timeout = 5000");
+      newDb.pragma("foreign_keys = ON");
 
-    const count = newDb.prepare("SELECT COUNT(*) AS n FROM files").get() as { n: number };
-    destroySession(null);
+      // Update globalThis singleton
+      const g = globalThis as unknown as {
+        __phryvosDb?: Database.Database;
+        __phryvosDbPath?: string;
+      };
+      g.__phryvosDb = newDb;
+      g.__phryvosDbPath = currentPath;
 
-    return { ok: true, filesCount: count.n };
+      const count = newDb.prepare("SELECT COUNT(*) AS n FROM files").get() as { n: number };
+      destroySession(null);
+
+      // Clean up safety snapshot on success
+      if (preRestoreBackup && fs.existsSync(preRestoreBackup)) {
+        fs.unlinkSync(preRestoreBackup);
+      }
+
+      return { ok: true, filesCount: count.n };
+    } catch (swapErr) {
+      // Rollback to original database on error
+      if (preRestoreBackup && currentPath && fs.existsSync(preRestoreBackup)) {
+        fs.copyFileSync(preRestoreBackup, currentPath);
+        const rollbackDb = new Database(currentPath);
+        rollbackDb.pragma("journal_mode = WAL");
+        rollbackDb.pragma("foreign_keys = ON");
+        const g = globalThis as unknown as {
+          __phryvosDb?: Database.Database;
+          __phryvosDbPath?: string;
+        };
+        g.__phryvosDb = rollbackDb;
+        g.__phryvosDbPath = currentPath;
+        fs.unlinkSync(preRestoreBackup);
+      }
+      throw swapErr;
+    }
   } finally {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -227,7 +303,8 @@ export interface ReKeyResult {
  *   - study_logs.notes_enc/notes_nonce/notes_tag
  *   - files.dek/dek_nonce/dek_tag (DEK wrapping only; content BLOBs untouched)
  */
-export function rekeyVault(oldPassword: string, newPassword: string): ReKeyResult {
+export async function rekeyVault(oldPassword: string, newPassword: string): Promise<ReKeyResult> {
+  await ensureVaultUnlocked();
   const db = getDb();
 
   const oldRow = db.prepare("SELECT kdf, salt, verifier FROM auth LIMIT 1").get() as

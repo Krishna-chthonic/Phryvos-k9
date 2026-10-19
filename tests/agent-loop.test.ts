@@ -107,8 +107,8 @@ describe("agent loop (fake LLM)", () => {
     assert.equal(res.finish, "stop");
     assert.equal(res.toolSteps, 4);
     assert.equal(steps, 4);
-    // final text was streamed + persisted last
-    assert.equal(res.text, "Project Phryvos created with 3 tasks.");
+    // final text was streamed + persisted last (may contain <think> block)
+    assert.ok(res.text.includes("Project Phryvos created with 3 tasks."));
     assert.equal(persisted[persisted.length - 1].content, res.text);
     // DB actually changed
     const p = db.prepare("SELECT * FROM projects WHERE title = ?").get("Phryvos") as
@@ -200,7 +200,7 @@ describe("agent loop (fake LLM)", () => {
     while (!askedId) await new Promise((r) => setTimeout(r, 5));
     assert.equal(resolveApproval(askedId, "deny").ok, true);
     const res = await p;
-    assert.equal(res.text, "Skipped as requested.");
+    assert.ok(res.text.includes("Skipped as requested."));
     assert.match(seenToolResults[0], /denied/i);
     // and the file survived
     assert.ok(readFile(ctx(), "/notes/groceries.md").bytes.length > 0);

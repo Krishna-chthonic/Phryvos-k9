@@ -1,3 +1,12 @@
+/**
+ * Database client for Phryvos-k9 vault.
+ *
+ * Importers/callers: All services (vault-service, backup-service, chat-service, etc.),
+ * authentication routes, DAL, duress-vault
+ * Affected API: Database connection singleton, migration runner
+ * Data schemas: All SQLite tables (files, chat_sessions, study_logs, etc.)
+ * User instruction verbatim: "Pure JS, WebAssembly, and in-process SQLite (better-sqlite3)"
+ */
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
@@ -36,4 +45,20 @@ export function getDb(): Database.Database {
     g.__phryvosDbPath = p;
   }
   return g.__phryvosDb;
+}
+
+/**
+ * Initialize a separate database instance (for decoy vault, etc.)
+ * Does not use the global singleton - creates a fresh connection.
+ */
+export function initDb(dbPath: string): Database.Database {
+  const fullPath = path.resolve(dbPath);
+  fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+  const db = new Database(fullPath);
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
+  db.pragma("mmap_size = 268435456");
+  db.pragma("foreign_keys = ON");
+  runMigrations(db);
+  return db;
 }

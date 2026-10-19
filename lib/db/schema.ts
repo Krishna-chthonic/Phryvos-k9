@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, check, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // phryvos k9 — full vault schema. All timestamps are INTEGER UTC milliseconds.
 
@@ -291,4 +291,78 @@ export const memories = sqliteTable("memories", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+// FSRS Spaced Repetition Cards
+export const fsrsCards = sqliteTable(
+  "fsrs_cards",
+  {
+    id: integer("id").primaryKey(),
+    subjectId: integer("subject_id")
+      .notNull()
+      .references(() => examSubjects.id),
+    topicId: integer("topic_id").references(() => examTopics.id),
+    due: integer("due").notNull(),
+    stability: real("stability").notNull().default(0),
+    difficulty: real("difficulty").notNull().default(0),
+    elapsedDays: integer("elapsed_days").notNull().default(0),
+    scheduledDays: real("scheduled_days").notNull().default(0),
+    reps: integer("reps").notNull().default(0),
+    lapses: integer("lapses").notNull().default(0),
+    state: integer("state").notNull().default(0), // 0=New, 1=Learning, 2=Review, 3=Relearning
+    lastReview: integer("last_review"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_fsrs_cards_due").on(t.due),
+    index("idx_fsrs_cards_subject").on(t.subjectId),
+    index("idx_fsrs_cards_topic").on(t.topicId),
+  ],
+);
+
+// Vector RAG: file_chunks table for encrypted semantic search
+export const fileChunks = sqliteTable(
+  "file_chunks",
+  {
+    id: integer("id").primaryKey(),
+    filePath: text("file_path").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    // Encrypted with vault master key (envelope encryption)
+    contentEnc: blob("content_enc").notNull(),
+    contentNonce: blob("content_nonce").notNull(),
+    contentTag: blob("content_tag").notNull(),
+    // Raw f32[] embedding (768-dim nomic-embed-text, 1536-dim text-embedding-3-small)
+    embedding: blob("embedding").notNull(),
+    embeddingModel: text("embedding_model").notNull(),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_file_chunks_path").on(t.filePath),
+    index("idx_file_chunks_model").on(t.embeddingModel),
+  ],
+);
+
+// Sleep-Consolidation Memory Engine: two-tier STM → LTM
+export const memoryConsolidation = sqliteTable(
+  "memory_consolidation",
+  {
+    id: integer("id").primaryKey(),
+    stmKey: text("stm_key").unique().notNull(),
+    stmValue: text("stm_value").notNull(), // JSON: { fact, context, source, confidence }
+    stmAccessCount: integer("stm_access_count").notNull().default(0),
+    stmLastAccess: integer("stm_last_access").notNull(),
+    ltmPromoted: integer("ltm_promoted", { mode: "boolean" }).notNull().default(false),
+    ltmPoint: text("ltm_point"),
+    ltmCategory: text("ltm_category"),
+    decayScore: real("decay_score").notNull().default(1.0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_memory_stm_access").on(t.stmLastAccess),
+    index("idx_memory_decay").on(t.decayScore),
+  ],
+);
 

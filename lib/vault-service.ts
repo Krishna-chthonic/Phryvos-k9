@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { gcmDecrypt, gcmEncrypt, newFileEnvelope, openFileEnvelope } from "./crypto/envelope";
 import { getDb } from "./db/client";
+import { ensureVaultUnlocked, VaultLockedError, QueryBuilder, paginate, whereNotDeleted, buildFtsPhrase, escapeLike, normalizeVaultPath as dalNormalizeVaultPath } from "./dal/vault-dal";
 
 /**
  * Vault file service.
@@ -13,6 +14,11 @@ import { getDb } from "./db/client";
  *
  * This is the single implementation of file ops; API routes (P2) and agent
  * tools (P4) both call it, so behavior stays identical everywhere.
+ *
+ * Importers/callers: app/api/files/route.ts, app/api/files/content/route.ts, app/api/files/move/route.ts, app/api/files/search/route.ts, app/api/files/versions/route.ts, app/api/export/route.ts, components/vault/VaultApp.tsx
+ * Affected API: All vault file operations (CRUD, search, versions, move, restore)
+ * Data schemas: FileMeta, VersionInfo, SearchHit
+ * User instruction verbatim: "Unified DAL enforcing lock verification before any query executes"
  */
 
 export interface FileMeta {
@@ -113,23 +119,9 @@ function isTextLike(mime: string | null, name: string): boolean {
 }
 
 /** Normalize + validate a vault path. "" or "/" = root. */
+/** Normalize + validate a vault path. Uses DAL implementation for consistency. */
 export function normalizeVaultPath(p: string): string {
-  if (typeof p !== "string" || p.includes("\0") || p.includes("\\")) {
-    throw new VaultError("path_invalid", "Invalid vault path");
-  }
-  let s = p.trim().replace(/\/{2,}/g, "/");
-  if (s.length === 0) s = "/";
-  if (!s.startsWith("/")) s = "/" + s;
-  // strip trailing slashes (but keep root as "/")
-  while (s.length > 1 && s.endsWith("/")) s = s.slice(0, -1);
-  const segs = s.split("/").filter((x) => x !== "");
-  if (segs.some((x) => x === ".." || x === "." || x.includes(":"))) {
-    throw new VaultError("path_invalid", "Vault paths may not contain '..', '.' or ':' segments");
-  }
-  if (segs.length > MAX_DEPTH || s.length > MAX_PATH_LEN) {
-    throw new VaultError("path_invalid", "Vault path too deep or too long");
-  }
-  return s === "/" ? "/" : "/" + segs.join("/");
+  return dalNormalizeVaultPath(p);
 }
 
 function base(p: string): string {
@@ -178,7 +170,7 @@ function toMeta(r: FileRow): FileMeta {
 function selectMeta(ctx: VaultCtx, path: string): FileRow | undefined {
   return ctx.db
     .prepare("SELECT * FROM files WHERE path = ?")
-    .get(normalizeVaultPath(path)) as FileRow | undefined;
+    .get(dalNormalizeVaultPath(path)) as FileRow | undefined;
 }
 
 function ensureDir(ctx: VaultCtx, path: string): void {
@@ -669,9 +661,8 @@ export function search(ctx: VaultCtx, query: string): SearchHit[] {
 
 // ---------------------------------------------------------------- helpers
 
-function escapeLike(s: string): string {
-  return s.replace(/[_%]/g, "\\$&");
-}
+// Re-export DAL helpers for consistency
+export { escapeLike, buildFtsPhrase as ftsPhrase, whereNotDeleted, QueryBuilder, paginate, VaultLockedError } from "./dal/vault-dal";
 
 /** Open the DB handle (used by routes before ctx is built). */
 export function openVaultDb(): Database.Database {

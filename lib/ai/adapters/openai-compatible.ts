@@ -95,7 +95,7 @@ function parseToolArgs(s: string | undefined): Record<string, unknown> {
 export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClient {
   const client = new OpenAI({
     baseURL: conn.baseUrl,
-    apiKey: conn.apiKey || undefined,
+    apiKey: conn.apiKey || "not-required",
   });
 
   const mapTools = (tools?: ToolSpec[]) =>
@@ -115,18 +115,36 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
   }
 
   return {
-    async createTurn(messages, tools, model, onDelta): Promise<TurnResult> {
-      const base = {
+    async createTurn(messages, tools, model, onDelta, options): Promise<TurnResult> {
+      const base: Record<string, unknown> = {
         model,
         messages: toOaiMsgs(messages),
         tools: mapTools(tools),
         tool_choice: tools?.length ? ("auto" as const) : undefined,
       };
 
+      if (options?.reasoningEffort) {
+        base.reasoning_effort = options.reasoningEffort;
+      }
+      if (typeof options?.temperature === "number") {
+        base.temperature = options.temperature;
+      }
+      if (typeof options?.maxTokens === "number") {
+        base.max_tokens = options.maxTokens;
+      }
+      const timeoutMs = options?.timeoutMs ?? 180_000;
+
       if (!onDelta) {
-        const res = await create({ ...base, stream: false });
+        const res = await create({ ...base, stream: false }, timeoutMs);
         const choice = res.choices[0];
         const msg = choice?.message;
+        const reasoning =
+          (msg as { reasoning_content?: string; reasoning?: string })?.reasoning_content ??
+          (msg as { reasoning_content?: string; reasoning?: string })?.reasoning;
+        let fullText = msg?.content ?? "";
+        if (reasoning && !fullText.includes("<think>")) {
+          fullText = `<think>\n${reasoning}\n</think>\n\n${fullText}`;
+        }
         const tcs: ToolCall[] = (msg?.tool_calls ?? []).map((tc, i) => {
           const fn = tc.type === "function" ? tc.function : undefined;
           return {
@@ -136,7 +154,7 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
           };
         });
         return {
-          text: msg?.content ?? "",
+          text: fullText,
           toolCalls: tcs,
           finish: choice?.finish_reason === "tool_calls" ? "tool_calls" : "stop",
           usage: res.usage
@@ -151,11 +169,13 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
       // Streaming: text deltas out, tool-call fragments accumulated.
       // `create()` resolves to the non-streaming overload (params are `never`-cast),
       // so cast the awaited value to its real streaming shape.
-      const stream = await create({ ...base, stream: true }, 180_000);
+      const stream = await create({ ...base, stream: true }, timeoutMs);
       const chunks = stream as unknown as AsyncIterable<{
         choices?: Array<{
           delta?: {
             content?: string;
+            reasoning_content?: string;
+            reasoning?: string;
             tool_calls?: Array<{
               index?: number;
               id?: string;
@@ -166,14 +186,33 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
         }>;
       }>;
       let text = "";
+      let inThinking = false;
       const calls = new Map<number, { id: string; name: string; args: string }>();
       for await (const chunk of chunks) {
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
+
+        const reasoning = delta.reasoning_content ?? delta.reasoning;
+        if (reasoning) {
+          if (!inThinking) {
+            inThinking = true;
+            text += "<think>\n";
+            onDelta("<think>\n");
+          }
+          text += reasoning;
+          onDelta(reasoning);
+        }
+
         if (delta.content) {
+          if (inThinking) {
+            inThinking = false;
+            text += "\n</think>\n\n";
+            onDelta("\n</think>\n\n");
+          }
           text += delta.content;
           onDelta(delta.content);
         }
+
         for (const tc of delta.tool_calls ?? []) {
           const slot = calls.get(tc.index ?? 0) ?? {
             id: "",
@@ -185,6 +224,11 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
           if (tc.function?.arguments) slot.args += tc.function.arguments;
           calls.set(tc.index ?? 0, slot);
         }
+      }
+      if (inThinking) {
+        inThinking = false;
+        text += "\n</think>\n\n";
+        onDelta("\n</think>\n\n");
       }
       const toolCalls: ToolCall[] = [...calls.entries()]
         .sort((a, b) => a[0] - b[0])

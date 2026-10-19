@@ -88,10 +88,10 @@ export function BackupPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 space-y-5">
       <div>
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Backups & Export</h2>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           Create full export bundles, manage backups, and restore from a zip.
         </p>
       </div>

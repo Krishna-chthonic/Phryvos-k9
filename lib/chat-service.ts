@@ -1,15 +1,16 @@
 /**
  * Chat persistence and context assembly service for phryvos-k9.
  *
- * Importers/callers: app/api/chat/sessions/route.ts
+ * Importers/callers: app/api/chat/sessions/route.ts, app/api/chat/sessions/[id]/messages/route.ts, app/api/chat/sessions/[id]/compact/route.ts
  * Affected API: Chat message streaming and session endpoints
- * Data schemas if any: chat_sessions, chat_messages, memories
- * User instruction verbatim: "3. ek memmory system bhi hona chahiye ai ke liye jisme vo points bana ke chijo ko permanentlt yaad rakhe jinko users khud se kahe ki ye chij yaad rakhna ya permanently save kar lo"
+ * Data schemas: chat_sessions, chat_messages, memories
+ * User instruction verbatim: "Unified DAL enforcing lock verification before any query executes"
  */
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { encryptBlob, gcmDecrypt } from "@/lib/crypto/envelope";
 import type { UnifiedMessage, UnifiedPart, ToolCall } from "@/lib/ai/types";
+import { ensureVaultUnlocked, VaultLockedError } from "@/lib/dal/vault-dal";
 
 /**
  * Chat persistence: encrypted at rest (content, titles, summaries under the
@@ -21,6 +22,14 @@ import type { UnifiedMessage, UnifiedPart, ToolCall } from "@/lib/ai/types";
 export interface VaultCtx {
   db: Database.Database;
   key: Buffer;
+}
+
+/**
+ * Verify vault is unlocked before any chat operation.
+ * This enforces the Unified DAL lock verification gate.
+ */
+export async function assertChatVaultUnlocked(): Promise<void> {
+  await ensureVaultUnlocked();
 }
 
 export interface ChatSessionMeta {
@@ -425,6 +434,43 @@ When answering mathematics, physics, science, or calculation questions:
 4. Bold and clearly label the final numerical result with appropriate units (e.g. "**Final Result: 54.2 m/s**").
 5. When complex arithmetic is required, use the \`calculate\` tool to guarantee calculation precision without arithmetic errors.
 </mathematics_and_numerical_guidelines>`,
+  });
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  // Guidelines for live web search and real-time grounding
+  messages.push({
+    role: "system",
+    content: `<live_grounding_and_web_guidelines>
+Current Real-World Date: ${dateStr}.
+CRITICAL INSTRUCTION ON REAL-TIME & LIVE WEB DATA:
+1. Your static training data has a strict knowledge cutoff. For any queries concerning current affairs, sports scores and winners (cricket, football, Olympics), latest technological releases, current events, live information, market prices, or recent facts:
+   YOU MUST PROACTIVELY USE THE \`web_search\` TOOL TO FETCH LIVE REAL-TIME DATA BEFORE ANSWERING.
+2. DO NOT state that your knowledge is cut off or that you cannot access the internet; you HAVE active access to the live internet through \`web_search\` and \`web_fetch\`.
+3. When searching, craft targeted search queries (e.g. "who won the 2024 t20 world cup", "latest release date of model X").
+4. If a search result returns an important URL with deep information, use \`web_fetch\` to read the full page and extract verified details.
+5. Ground your answer completely on the retrieved search results and cite sources with Markdown links [Source](URL).
+</live_grounding_and_web_guidelines>`,
+  });
+
+  // Guidelines for file inspection, archives, and plugins
+  messages.push({
+    role: "system",
+    content: `<file_and_plugin_guidelines>
+You have rich tools for file inspection and data analysis in the user's vault:
+- PDF reading: Use \`read_pdf\` or \`read_file\` on PDF files to extract and read full document text and page counts.
+- ZIP archives: Use \`inspect_zip\` to view archive entries/sizes, \`read_zip_entry\` to read individual files inside a ZIP archive, and \`extract_zip\` to unpack an archive into the vault.
+- Tabular data: Use \`analyze_data_file\` to analyze CSV, TSV, or JSON datasets (row counts, column types, statistics, previews).
+- Code sandbox: Use \`run_js_code\` for algorithmic problems, data transformations, string processing, or complex calculations.
+- Exam prep: Use \`list_exam_topics\` to check topic progress percentages and \`log_study_session\` to record study sessions.
+- Web: Use \`web_search\` and \`web_fetch\` for live internet research and scraping.
+</file_and_plugin_guidelines>`,
   });
 
   if (summary)

@@ -39,9 +39,9 @@ export function SystemPromptPanel() {
   };
 
   return (
-    <section>
+    <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-3">
-        <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">System prompt</h2>
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Global AI System Prompt</h2>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
           Instructions prepended to every chat, for every provider. Leave empty to
           use the default behavior.

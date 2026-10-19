@@ -3,7 +3,7 @@
  *
  * Importers/callers: lib/agent/loop.ts
  * Affected API: Agent SSE tool execution
- * Data schemas if any: All vault tables + memories table
+ * Data schemas if any: All vault tables + memories table + file_chunks + memory_consolidation
  * User instruction verbatim: "3. ek memmory system bhi hona chahiye ai ke liye jisme vo points bana ke chijo ko permanentlt yaad rakhe jinko users khud se kahe ki ye chij yaad rakhna ya permanently save kar lo"
  */
 import { z } from "zod";
@@ -26,6 +26,41 @@ import { runDataQuery, formatRows, DataQueryError } from "./data-query";
 import { addMemory, listMemories, deleteMemory } from "../memory-service";
 import { performWebSearch } from "./web-search";
 import { performWebFetch } from "./web-fetch";
+import { parsePdfBuffer } from "./pdf-reader";
+import {
+  inspectZipBuffer,
+  readZipEntry,
+  extractZipToVault,
+} from "./zip-reader";
+import { analyzeDataContent } from "./data-analyzer";
+import { runSandboxedJs } from "./code-runner";
+import {
+  listExamSubjectsWithTopics,
+  logExamStudySession,
+} from "./study-manager";
+import {
+  upsertFileChunks,
+  searchChunks,
+  reindexAllFiles,
+  getRagStats,
+} from "@/lib/vector/rag";
+import {
+  storeSTM,
+  recallSTM,
+  getAllSTM,
+  runConsolidationJob,
+  getConsolidationStats,
+} from "@/lib/memory/consolidation";
+import { runTotDerivation, getTotConfig } from "./tot";
+import { createRouter, classifyIntent, type IntentCategory, type ModelTier, INTENT_TO_TIER, INTENT_KEYWORDS } from "@/lib/ai/router";
+import { JEE_PROBLEMS, getProblemConfig, getProblemDescription, type PhysicsProblemType, type ProblemConfig } from "@/lib/physics/arena";
+import {
+  loadAndRegisterCustomSkills,
+  toolInstallSkill,
+  toolListSkills,
+  toolRemoveSkill,
+} from "./custom-skills";
+import { getDb } from "@/lib/db/client";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -91,9 +126,47 @@ function toolListFiles(ctx: VaultCtx, a: { path?: string }) {
   return rows.map(metaLine).join("\n");
 }
 
-function toolReadFile(ctx: VaultCtx, a: { path: string }) {
+async function toolReadFile(ctx: VaultCtx, a: { path: string }) {
   const { bytes, mime } = readFile(ctx, a.path);
   if (bytes.length === 0) return "(empty file)";
+
+  const lowerPath = a.path.toLowerCase();
+
+  // Smart PDF extraction
+  if (lowerPath.endsWith(".pdf") || mime === "application/pdf") {
+    try {
+      const res = await parsePdfBuffer(bytes);
+      return `[PDF Document: ${res.pages} page(s), ${fmtSize(bytes.length)}]\n\n${res.text}`;
+    } catch (e) {
+      return `[PDF Document (${fmtSize(bytes.length)}) — error parsing text: ${e instanceof Error ? e.message : String(e)}]`;
+    }
+  }
+
+  // Smart ZIP archive inspection
+  if (
+    lowerPath.endsWith(".zip") ||
+    mime === "application/zip" ||
+    mime === "application/x-zip-compressed"
+  ) {
+    try {
+      const res = inspectZipBuffer(bytes);
+      const fileList = res.entries
+        .slice(0, 50)
+        .map(
+          (e) =>
+            `${e.isDirectory ? "dir " : "file"} ${e.name} (${fmtSize(e.sizeBytes)})`,
+        )
+        .join("\n");
+      const overflow =
+        res.entries.length > 50
+          ? `\n… [${res.entries.length - 50} more entries]`
+          : "";
+      return `[ZIP Archive: ${res.totalEntries} entries, uncompressed ${fmtSize(res.totalUncompressedBytes)}]\n\nEntries:\n${fileList}${overflow}\n\nTip: Use tool 'read_zip_entry' with entryPath to read individual files inside this archive, or 'extract_zip' to unpack it into a vault folder.`;
+    } catch (e) {
+      return `[ZIP Archive (${fmtSize(bytes.length)}) — error inspecting entries: ${e instanceof Error ? e.message : String(e)}]`;
+    }
+  }
+
   if (!isTextMime(mime)) {
     return `Binary file (${mime ?? "unknown type"}, ${fmtSize(bytes.length)}) — content not displayed.`;
   }
@@ -102,6 +175,59 @@ function toolReadFile(ctx: VaultCtx, a: { path: string }) {
   return text.length > cap
     ? `${text.slice(0, cap)}\n… [${text.length - cap} more chars, read in a narrower range or search instead]`
     : text;
+}
+
+async function toolReadPdf(ctx: VaultCtx, a: { path: string; maxPages?: number }) {
+  const { bytes } = readFile(ctx, a.path);
+  if (bytes.length === 0) return `File ${a.path} is empty.`;
+  const res = await parsePdfBuffer(bytes, a.maxPages);
+  let header = `[PDF: ${a.path} | ${res.pages} page(s), ${fmtSize(bytes.length)}]`;
+  if (res.info && typeof res.info === "object") {
+    const meta = res.info as Record<string, unknown>;
+    if (meta.Title) header += `\nTitle: ${String(meta.Title)}`;
+    if (meta.Author) header += `\nAuthor: ${String(meta.Author)}`;
+  }
+  return `${header}\n\n${res.text}`;
+}
+
+function toolInspectZip(ctx: VaultCtx, a: { path: string }) {
+  const { bytes } = readFile(ctx, a.path);
+  if (bytes.length === 0) return `File ${a.path} is empty.`;
+  const res = inspectZipBuffer(bytes);
+  const rows = res.entries.map(
+    (e) => `${e.isDirectory ? "📁 dir " : "📄 file"} ${e.name} (${fmtSize(e.sizeBytes)})`,
+  );
+  return `ZIP Archive "${a.path}": ${res.totalEntries} items (uncompressed total ${fmtSize(res.totalUncompressedBytes)})\n\n${rows.join("\n")}`;
+}
+
+function toolReadZipEntry(
+  ctx: VaultCtx,
+  a: { zipPath: string; entryPath: string; maxChars?: number },
+) {
+  const { bytes } = readFile(ctx, a.zipPath);
+  if (bytes.length === 0) return `File ${a.zipPath} is empty.`;
+  const res = readZipEntry(bytes, a.entryPath, a.maxChars);
+  if (!res.found) {
+    return `File "${a.entryPath}" was not found inside "${a.zipPath}". Use 'inspect_zip' to check available paths.`;
+  }
+  if (res.isDirectory) {
+    return `"${a.entryPath}" is a directory inside the archive, not a file.`;
+  }
+  return `Content of "${res.name}" inside "${a.zipPath}" (${fmtSize(res.sizeBytes)}):\n\n${res.content}`;
+}
+
+function toolExtractZip(ctx: VaultCtx, a: { zipPath: string; destinationDir: string }) {
+  const { bytes } = readFile(ctx, a.zipPath);
+  if (bytes.length === 0) return `File ${a.zipPath} is empty.`;
+  const res = extractZipToVault(ctx, bytes, a.destinationDir);
+  return `Successfully extracted ${res.extractedCount} file(s) (${fmtSize(res.totalBytes)}) from "${a.zipPath}" into "${a.destinationDir}".`;
+}
+
+function toolAnalyzeDataFile(ctx: VaultCtx, a: { path: string }) {
+  const { bytes } = readFile(ctx, a.path);
+  if (bytes.length === 0) return `File ${a.path} is empty.`;
+  const text = bytes.toString("utf8");
+  return analyzeDataContent(text, a.path);
 }
 
 function toolWriteFile(ctx: VaultCtx, a: { path: string; content: string }) {
@@ -428,6 +554,44 @@ function toolListEvents(ctx: VaultCtx, a: { fromMs?: number; toMs?: number; limi
     .join("\n");
 }
 
+function toolUpdateEvent(
+  ctx: VaultCtx,
+  a: {
+    id: number;
+    title?: string;
+    startAt?: string | number;
+    endAt?: string | number | null;
+    allDay?: boolean;
+    color?: string | null;
+    notes?: string | null;
+  },
+) {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const push = (col: string, v: unknown) => {
+    sets.push(`${col} = ?`);
+    params.push(v);
+  };
+  if (a.title !== undefined) push("title", a.title);
+  if (a.startAt !== undefined) push("start_at", toMs(a.startAt));
+  if (a.endAt !== undefined) push("end_at", a.endAt ? toMs(a.endAt) : null);
+  if (a.allDay !== undefined) push("all_day", a.allDay ? 1 : 0);
+  if (a.color !== undefined) push("color", a.color ?? null);
+  if (a.notes !== undefined) push("notes", a.notes ?? null);
+  if (sets.length === 0) return "Nothing to update on event.";
+  sets.push("updated_at = ?");
+  params.push(nowMs(), a.id);
+  const r = ctx.db.prepare(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+  if (r.changes === 0) return `Event #${a.id} not found.`;
+  return `Updated event #${a.id}.`;
+}
+
+function toolDeleteEvent(ctx: VaultCtx, a: { id: number }) {
+  const r = ctx.db.prepare("DELETE FROM events WHERE id = ?").run(a.id);
+  if (r.changes === 0) return `Event #${a.id} not found.`;
+  return `Deleted event #${a.id}.`;
+}
+
 // ------------------------------------------------------------------- goals
 
 function toolCreateGoal(
@@ -545,6 +709,22 @@ function toolExamProgress(ctx: VaultCtx, a: { topic: string; progressPct: number
   return `Set "${a.topic}" to ${a.progressPct}% preparation.`;
 }
 
+function toolListExamTopics(ctx: VaultCtx) {
+  return listExamSubjectsWithTopics(ctx);
+}
+
+function toolLogStudySession(
+  ctx: VaultCtx,
+  a: {
+    durationMin: number;
+    topicName?: string;
+    subjectName?: string;
+    notes?: string;
+  },
+) {
+  return logExamStudySession(ctx, a);
+}
+
 // -------------------------------------------------------------------- time
 
 function toolTimeLog(
@@ -590,8 +770,13 @@ function toolDataQuery(_ctx: VaultCtx, a: { sql: string }) {
 // ------------------------------------------------------------------ memory
 
 function toolSaveMemory(ctx: VaultCtx, a: { point: string; category?: string }) {
-  const item = addMemory(ctx.db, a.point, a.category);
-  return `Saved to permanent memory #${item.id}: "${item.point}".`;
+  try {
+    const item = addMemory(ctx.db, a.point, a.category, { source: "agent" });
+    return `Saved to permanent memory #${item.id}: "${item.point}".`;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return `Refused to save memory: ${msg}`;
+  }
 }
 
 function toolListMemories(ctx: VaultCtx) {
@@ -641,6 +826,134 @@ function toolCalculate(_ctx: VaultCtx, a: { expression: string }) {
   } catch (e) {
     return `Calculation error: ${e instanceof Error ? e.message : String(e)}`;
   }
+}
+
+function toolRunJsCode(_ctx: VaultCtx, a: { code: string }) {
+  const res = runSandboxedJs(a.code);
+  if (!res.success) {
+    return `Execution Error (${res.durationMs}ms):\n${res.error}${res.output ? `\n\nLogs prior to error:\n${res.output}` : ""}`;
+  }
+  return `Execution Success (${res.durationMs}ms):\n${res.output}`;
+}
+
+// ---------------------------------------------------------------- RAG (Vector Search)
+
+async function toolSearchChunks(ctx: VaultCtx, a: { query: string; k?: number; filePaths?: string[] }) {
+  const results = await searchChunks(ctx, a.query, a.k ?? 5, a.filePaths);
+  if (results.length === 0) return `No relevant chunks found for "${a.query}".`;
+  return results
+    .map(
+      (r, i) =>
+        `[${i + 1}] ${r.filePath} (chunk ${r.chunkIndex}, score ${r.score.toFixed(3)}, ${r.tokenCount} tokens):\n${r.content.slice(0, 500)}${r.content.length > 500 ? "…" : ""}`,
+    )
+    .join("\n\n");
+}
+
+async function toolReindexVault(ctx: VaultCtx) {
+  const result = await reindexAllFiles(ctx);
+  return `Reindexed ${result.files} files, created ${result.chunks} chunks.`;
+}
+
+async function toolRagStats(ctx: VaultCtx) {
+  const stats = await getRagStats(ctx);
+  return `Vector RAG Stats:\n- Files indexed: ${stats.totalFiles}\n- Total chunks: ${stats.totalChunks}\n- Embedding models: ${stats.models.join(", ") || "none"}`;
+}
+
+// ---------------------------------------------------------------- Memory Consolidation (STM → LTM)
+
+async function toolStoreSTM(ctx: VaultCtx, a: { key: string; fact: string; context?: string; source?: string; confidence?: number }) {
+  await storeSTM(ctx, a.key, a.fact, a.context ?? "", a.source ?? "agent", a.confidence ?? 1.0);
+  return `Stored in STM: "${a.key}" → "${a.fact}"`;
+}
+
+async function toolRecallSTM(ctx: VaultCtx, a: { key: string }) {
+  const record = await recallSTM(ctx, a.key);
+  if (!record) return `No STM entry for key "${a.key}".`;
+  const parsed = JSON.parse(record.stmValue);
+  return `STM Recall "${a.key}":\nFact: ${parsed.fact}\nContext: ${parsed.context}\nSource: ${parsed.source}\nAccess count: ${record.stmAccessCount}\nDecay score: ${record.decayScore.toFixed(3)}`;
+}
+
+async function toolListSTM(ctx: VaultCtx) {
+  const records = await getAllSTM(ctx);
+  if (records.length === 0) return "(STM empty)";
+  return records
+    .map((r) => {
+      const parsed = JSON.parse(r.stmValue);
+      return `#${r.id} [${r.decayScore.toFixed(3)} decay, ${r.stmAccessCount} accesses] ${parsed.fact}`;
+    })
+    .join("\n");
+}
+
+async function toolRunConsolidation(ctx: VaultCtx) {
+  const result = await runConsolidationJob(ctx);
+  return `Consolidation complete:\n- Clusters processed: ${result.clustersProcessed}\n- Facts promoted to LTM: ${result.factsPromoted}\n- STM records deleted: ${result.recordsDeleted}`;
+}
+
+async function toolConsolidationStats(ctx: VaultCtx) {
+  const stats = await getConsolidationStats(ctx);
+  return `Memory Consolidation Stats:\n- STM total: ${stats.stmTotal}\n- STM promoted: ${stats.stmPromoted}\n- STM active: ${stats.stmActive}\n- LTM total: ${stats.ltmTotal}\n- Average decay: ${stats.avgDecay.toFixed(3)}`;
+}
+
+// ---------------------------------------------------------------- Tree-of-Thought
+
+async function toolRunTot(ctx: VaultCtx, a: { problem: string; knowns?: Record<string, string>; unknowns?: string[] }) {
+  const result = await runTotDerivation(ctx, a.problem, a.knowns, a.unknowns);
+  let output = `Tree-of-Thought Derivation for: ${a.problem}\n\n`;
+  for (const step of result.steps) {
+    output += `=== ${step.paradigm.toUpperCase()} ===\n`;
+    output += `Confidence: ${(step.confidence * 100).toFixed(0)}%\n`;
+    output += `Equations: ${step.equations.join(", ") || "none"}\n`;
+    output += `Expression: ${step.finalExpression || "none"}\n`;
+    output += `Reasoning: ${step.reasoning.slice(0, 300)}...\n\n`;
+  }
+  output += `=== SYNTHESIS ===\n`;
+  output += `Best Expression: ${result.synthesis.bestExpression}\n`;
+  output += `Best Paradigm: ${result.synthesis.bestParadigm}\n`;
+  output += `Verification: dimensional=${result.synthesis.verification.dimensionalConsistent}, limits=${result.synthesis.verification.limitsAgree}, agreement=${(result.synthesis.verification.crossParadigmAgreement * 100).toFixed(0)}%\n\n`;
+  output += `${result.synthesis.tradeoffs}`;
+  return output;
+}
+
+// ---------------------------------------------------------------- Physics Arena
+
+function toolListPhysicsProblems(_ctx: VaultCtx) {
+  const entries = Object.entries(JEE_PROBLEMS);
+  return entries
+    .map(([key, config]: [string, ProblemConfig]) => {
+      const desc = getProblemDescription(key as PhysicsProblemType);
+      const params = Object.entries(config.parameters)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ");
+      return `${key}: ${desc}\n  Parameters: ${params}`;
+    })
+    .join("\n\n");
+}
+
+async function toolRenderPhysicsProblem(ctx: VaultCtx, a: { type: string; params?: Record<string, number> }) {
+  if (!(a.type in JEE_PROBLEMS)) {
+    const available = Object.keys(JEE_PROBLEMS).join(", ");
+    return `Unknown problem type "${a.type}". Available: ${available}`;
+  }
+  const config = getProblemConfig(a.type as PhysicsProblemType, a.params);
+  const desc = getProblemDescription(a.type as PhysicsProblemType);
+  const paramsStr = Object.entries(config.parameters)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+  return `Physics Problem: ${a.type}\n${desc}\n\nParameters: ${paramsStr}\n\nUse the Artifact Drawer to run the interactive simulation.`;
+}
+
+// ---------------------------------------------------------------- Semantic Router
+
+async function toolClassifyIntent(_ctx: VaultCtx, a: { text: string }) {
+  const category = classifyIntent(a.text);
+  const tier = INTENT_TO_TIER[category];
+  return `Intent: ${category}\nTier: ${tier}\nKeywords matched: ${INTENT_KEYWORDS[category].join(", ")}`;
+}
+
+async function toolRouteIntent(ctx: VaultCtx, a: { text: string; providerId?: number; model?: string; tier?: ModelTier }) {
+  const router = createRouter(ctx);
+  const decision = await router.route(a.text, { providerId: a.providerId, model: a.model, tier: a.tier });
+  return `Routing Decision:\n- Provider: ${decision.providerId}\n- Model: ${decision.model}\n- Tier: ${decision.tier}\n- Reasoning: ${decision.reasoning}`;
 }
 
 // ---------------------------------------------------------------- web skills
@@ -1115,6 +1428,350 @@ export function ensureAgentTools(): void {
     toolWebFetch,
     false,
     z.object({ url: z.string().min(1), maxChars: z.number().optional() }),
+  );
+
+  reg(
+    "read_pdf",
+    "Extract and read the text of a PDF document stored in the vault. Returns page count and full readable text with optional page limits.",
+    P(
+      "read_pdf",
+      "Read a PDF file",
+      { path: { type: "string", description: "Vault path to .pdf file" } },
+      { maxPages: { type: "number", description: "Max pages to extract (default: all)" } },
+    ),
+    toolReadPdf,
+    false,
+    z.object({ path: z.string().min(1), maxPages: z.number().optional() }),
+  );
+
+  reg(
+    "inspect_zip",
+    "Inspect the contents of a ZIP archive in the user's vault without extracting it. Returns the file tree with paths, uncompressed sizes, and dates.",
+    P("inspect_zip", "Inspect ZIP archive", {
+      path: { type: "string", description: "Vault path to .zip archive" },
+    }),
+    toolInspectZip,
+    false,
+    z.object({ path: z.string().min(1) }),
+  );
+
+  reg(
+    "read_zip_entry",
+    "Read the text content of a specific file inside a ZIP archive in the vault without unpacking the entire archive.",
+    P(
+      "read_zip_entry",
+      "Read file inside ZIP",
+      {
+        zipPath: { type: "string", description: "Vault path to .zip archive" },
+        entryPath: {
+          type: "string",
+          description: "Path of file inside archive, e.g. README.md or src/index.ts",
+        },
+      },
+      { maxChars: { type: "number", description: "Max characters to read" } },
+    ),
+    toolReadZipEntry,
+    false,
+    z.object({
+      zipPath: z.string().min(1),
+      entryPath: z.string().min(1),
+      maxChars: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "extract_zip",
+    "Unpack and extract all files from a ZIP archive in the vault into an encrypted destination directory in the vault.",
+    P(
+      "extract_zip",
+      "Extract ZIP archive into vault",
+      {
+        zipPath: { type: "string", description: "Vault path to .zip archive" },
+        destinationDir: {
+          type: "string",
+          description: "Target directory in vault, e.g. /extracted/my-project",
+        },
+      },
+    ),
+    toolExtractZip,
+    true,
+    z.object({ zipPath: z.string().min(1), destinationDir: z.string().min(1) }),
+  );
+
+  reg(
+    "analyze_data_file",
+    "Analyze a structured tabular dataset (CSV, TSV, or JSON) in the vault. Returns row count, column types, statistics (min, max, average, sum for numbers), distinct counts, and sample records.",
+    P("analyze_data_file", "Analyze data file", {
+      path: { type: "string", description: "Vault path to CSV, TSV, or JSON file" },
+    }),
+    toolAnalyzeDataFile,
+    false,
+    z.object({ path: z.string().min(1) }),
+  );
+
+  reg(
+    "run_js_code",
+    "Safely execute a JavaScript code snippet in a sandboxed environment for algorithms, statistical analysis, data processing, string manipulation, or complex logic. Has standard Math, Date, JSON, Array builtins and console.log.",
+    P("run_js_code", "Run sandboxed JavaScript", {
+      code: { type: "string", description: "JavaScript code snippet to execute" },
+    }),
+    toolRunJsCode,
+    false,
+    z.object({ code: z.string().min(1) }),
+  );
+
+  // ---------------------------------------------------------------- RAG (Vector Search)
+
+  reg(
+    "search_chunks",
+    "Search the vector RAG index for relevant file chunks using cosine similarity. Returns matching content with scores.",
+    P(
+      "search_chunks",
+      "Search vector RAG",
+      { query: { type: "string", description: "Search query" } },
+      {
+        k: { type: "number", description: "Max results (default 5)" },
+        filePaths: { type: "array", items: { type: "string" }, description: "Optional file paths to restrict search" },
+      },
+    ),
+    toolSearchChunks,
+    false,
+    z.object({ query: z.string().min(1), k: z.number().optional(), filePaths: z.array(z.string()).optional() }),
+  );
+
+  reg(
+    "reindex_vault",
+    "Re-index all files in the vault for vector RAG. Reads all file content, chunks it, generates embeddings, and stores in file_chunks table.",
+    P("reindex_vault", "Reindex vault for RAG", {}),
+    toolReindexVault,
+    true,
+    z.object({}),
+  );
+
+  reg(
+    "rag_stats",
+    "Get statistics about the vector RAG index: file count, chunk count, embedding models used.",
+    P("rag_stats", "RAG statistics", {}),
+    toolRagStats,
+    false,
+    z.object({}),
+  );
+
+  // ---------------------------------------------------------------- Memory Consolidation (STM → LTM)
+
+  reg(
+    "store_stm",
+    "Store a fact in short-term memory (STM). Facts with repeated access will be promoted to permanent long-term memory (LTM) during consolidation.",
+    P(
+      "store_stm",
+      "Store in STM",
+      { key: { type: "string", description: "Unique key for this fact" }, fact: { type: "string", description: "The fact to remember" } },
+      {
+        context: { type: "string", description: "Context where this fact was learned" },
+        source: { type: "string", description: "Source: chat, web, file, etc." },
+        confidence: { type: "number", minimum: 0, maximum: 1, description: "Confidence level (0-1)" },
+      },
+    ),
+    toolStoreSTM,
+    false,
+    z.object({ key: z.string().min(1), fact: z.string().min(1), context: z.string().optional(), source: z.string().optional(), confidence: z.number().min(0).max(1).optional() }),
+  );
+
+  reg(
+    "recall_stm",
+    "Recall a fact from short-term memory by its key. Increments access count and resets decay.",
+    P("recall_stm", "Recall from STM", { key: { type: "string", description: "STM key to recall" } }),
+    toolRecallSTM,
+    false,
+    z.object({ key: z.string().min(1) }),
+  );
+
+  reg(
+    "list_stm",
+    "List all active short-term memory entries with their decay scores and access counts.",
+    P("list_stm", "List STM entries", {}),
+    toolListSTM,
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "run_consolidation",
+    "Run the memory consolidation job: cluster similar STM entries, synthesize them, promote to LTM, and clean up old unaccessed entries.",
+    P("run_consolidation", "Run memory consolidation", {}),
+    toolRunConsolidation,
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "consolidation_stats",
+    "Get memory consolidation statistics: STM/LTM counts, promotion status, average decay.",
+    P("consolidation_stats", "Consolidation statistics", {}),
+    toolConsolidationStats,
+    false,
+    z.object({}),
+  );
+
+  // ---------------------------------------------------------------- Tree-of-Thought
+
+  reg(
+    "run_tot",
+    "Run Tree-of-Thought derivation: explores multiple reasoning paradigms (Force Balance, Energy, Symmetry) to synthesize an elegant solution.",
+    P("run_tot", "Run Tree-of-Thought", { problem: { type: "string", description: "Physics/math problem to solve" } }, { knowns: { type: "object", description: "Known variables" }, unknowns: { type: "array", items: { type: "string" }, description: "Variables to solve for" } }),
+    toolRunTot,
+    false,
+    z.object({ problem: z.string().min(1), knowns: z.record(z.string(), z.string()).optional(), unknowns: z.array(z.string()).optional() }),
+  );
+
+  // ---------------------------------------------------------------- Physics Arena
+
+  reg(
+    "list_physics_problems",
+    "List available JEE physics problems with their parameters (bead_on_wire, double_pendulum, gyroscope, central_force).",
+    P("list_physics_problems", "List physics problems", {}),
+    toolListPhysicsProblems,
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "render_physics_problem",
+    "Get configuration for a physics problem to render in the Artifact Drawer. Returns parameters and description.",
+    P("render_physics_problem", "Get physics problem config", { type: { type: "string", description: "Problem type" } }, { params: { type: "object", description: "Optional parameter overrides" } }),
+    toolRenderPhysicsProblem,
+    false,
+    z.object({ type: z.string().min(1), params: z.record(z.string(), z.number()).optional() }),
+  );
+
+  // ---------------------------------------------------------------- Semantic Router
+
+  reg(
+    "classify_intent",
+    "Classify user intent from text to determine optimal model tier (fast/balanced/reasoning).",
+    P("classify_intent", "Classify intent", { text: { type: "string", description: "User input text" } }),
+    toolClassifyIntent,
+    false,
+    z.object({ text: z.string().min(1) }),
+  );
+
+  reg(
+    "route_intent",
+    "Route an intent to the best provider/model using the semantic router. Returns provider ID, model, tier, and reasoning.",
+    P("route_intent", "Route intent to provider", { text: { type: "string", description: "User input text" } }, { providerId: { type: "number" }, model: { type: "string" }, tier: { type: "string", enum: ["fast", "balanced", "reasoning"] } }),
+    toolRouteIntent,
+    false,
+    z.object({ text: z.string().min(1), providerId: z.number().optional(), model: z.string().optional(), tier: z.enum(["fast", "balanced", "reasoning"]).optional() }),
+  );
+
+  // ---------------------------------------------------------------- exams
+
+  reg(
+    "list_exam_topics",
+    "List all exam preparation subjects, exam target dates, and all topics with current preparation percentages (0-100%).",
+    P("list_exam_topics", "List exam topics and progress", {}),
+    toolListExamTopics,
+  );
+
+  reg(
+    "log_study_session",
+    "Log an exam study session into exam study logs with duration in minutes, optional topic/subject name, and optional notes.",
+    P(
+      "log_study_session",
+      "Log exam study session",
+      { durationMin: { type: "number", description: "Minutes studied" } },
+      {
+        topicName: { type: "string", description: "Exam topic name" },
+        subjectName: { type: "string", description: "Exam subject name" },
+        notes: { type: "string", description: "Notes about what was revised" },
+      },
+    ),
+    toolLogStudySession,
+    false,
+    z.object({
+      durationMin: z.number().positive(),
+      topicName: z.string().optional(),
+      subjectName: z.string().optional(),
+      notes: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "update_event",
+    "Update an existing calendar event's title, time, notes, or color.",
+    P(
+      "update_event",
+      "Update calendar event",
+      { id: { type: "number", description: "Event id" } },
+      {
+        title: { type: "string" },
+        startAt: { type: "string", description: "ISO date or epoch ms" },
+        endAt: { type: "string", description: "ISO date or epoch ms" },
+        allDay: { type: "boolean" },
+        color: { type: "string" },
+        notes: { type: "string" },
+      },
+    ),
+    toolUpdateEvent,
+  );
+
+  reg(
+    "delete_event",
+    "Delete a calendar event from the user's calendar.",
+    P("delete_event", "Delete calendar event", {
+      id: { type: "number", description: "Event ID to delete" },
+    }),
+    toolDeleteEvent,
+    true,
+    z.object({ id: z.number() }),
+  );
+
+  // Dynamic autonomous skills system
+  try {
+    loadAndRegisterCustomSkills(getDb());
+  } catch {}
+
+  reg(
+    "install_skill",
+    "Dynamically create and install a new tool/plugin into your AI system. It immediately registers and becomes available for you to execute in next steps. Supply name (snake_case), description of when to call it, JSON schema parameters, and async JavaScript execution code body (can use args, ctx, fetch).",
+    P(
+      "install_skill",
+      "Install dynamic AI skill/plugin",
+      {
+        name: { type: "string", description: "Skill name in snake_case, e.g. currency_converter" },
+        description: { type: "string", description: "What the skill does and when the model should call it" },
+        code: { type: "string", description: "JavaScript function body, e.g. const res = await fetch(...); return res.text();" },
+      },
+      {
+        parameters: { type: "object", description: "OpenAI JSON schema for arguments" },
+      },
+    ),
+    (c, a) => toolInstallSkill(a, c),
+    false,
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      code: z.string(),
+      parameters: z.any().optional(),
+    }),
+  );
+
+  reg(
+    "list_skills",
+    "List all dynamically installed custom AI skills and plugins.",
+    P("list_skills", "List custom skills", {}),
+    (c, a) => toolListSkills(a, c),
+  );
+
+  reg(
+    "remove_skill",
+    "Uninstall and delete a dynamic AI skill by its name.",
+    P("remove_skill", "Remove custom skill", {
+      name: { type: "string", description: "Name of the skill to remove" },
+    }),
+    (c, a) => toolRemoveSkill(a, c),
+    false,
+    z.object({ name: z.string() }),
   );
 }
 

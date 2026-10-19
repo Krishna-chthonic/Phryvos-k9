@@ -5,10 +5,10 @@
  *   ai_providers(api_key/key_nonce/key_tag), chat_sessions(title_enc/nonce/tag, summary_enc/nonce/tag),
  *   chat_messages(content_enc/nonce/tag), study_logs(notes_enc/nonce/tag),
  *   files(dek/dek_nonce/dek_tag — DEK envelope only)
- * User instruction verbatim: "continue"
+ * User instruction verbatim: "Unified DAL enforcing lock verification before any query executes"
  */
 import { z } from "zod";
-import { requireVault } from "@/server/vault-guard";
+import { internalResponse, requireVault, vaultGuardResponse } from "@/server/vault-guard";
 import { rekeyVault } from "@/lib/backup-service";
 
 const Body = z.object({
@@ -17,7 +17,14 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  await requireVault();
+  try {
+    await requireVault();
+  } catch (e) {
+    const auth = vaultGuardResponse(e);
+    if (auth) return auth;
+    return internalResponse(e);
+  }
+
   const body = Body.safeParse(await req.json().catch(() => null));
   if (!body.success)
     return Response.json(
@@ -25,7 +32,7 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   try {
-    const result = rekeyVault(body.data.oldPassword, body.data.newPassword);
+    const result = await rekeyVault(body.data.oldPassword, body.data.newPassword);
     return Response.json({ ok: true, result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Internal error";

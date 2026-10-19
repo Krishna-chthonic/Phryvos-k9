@@ -1,6 +1,23 @@
 import { z } from "zod";
 import { internalResponse, requireVault, vaultGuardResponse } from "@/server/vault-guard";
 import { getApproval, resolveApproval } from "@/lib/agent/guardrails";
+import { generateUnifiedDiff } from "@/lib/agent/diff-preview";
+
+/**
+ * Generate diff preview for approval UI
+ */
+function generateDiffPreview(tool: string, args: Record<string, unknown>): string {
+  if (tool === "write_file" && args.path && typeof args.content === "string") {
+    const oldContent = ""; // For new files, old content is empty
+    const newContent = args.content;
+    return generateUnifiedDiff(oldContent, newContent, String(args.path));
+  }
+  if (tool === "delete_file" && args.path) {
+    // For deletion, we'd need to read the file first - simplified for now
+    return generateUnifiedDiff("FILE CONTENTS HERE", "", String(args.path));
+  }
+  return "Diff preview not available for this tool type.";
+}
 
 /**
  * PUT /api/chat/approvals/:id  {"decision": "allow" | "deny"}

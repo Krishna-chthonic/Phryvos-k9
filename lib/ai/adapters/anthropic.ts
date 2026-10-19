@@ -121,29 +121,43 @@ export function createAnthropicClient(conn: ProviderConnection): LlmClient {
   }
 
   return {
-    async createTurn(messages, tools, model, onDelta): Promise<TurnResult> {
+    async createTurn(messages, tools, model, onDelta, options): Promise<TurnResult> {
       const { system, messages: amsgs } = mapMessages(messages);
-      const params = {
+      const timeoutMs = options?.timeoutMs ?? 180_000;
+      const params: Record<string, unknown> = {
         model,
-        max_tokens: 8192,
+        max_tokens: options?.maxTokens ?? 8192,
         system: system || undefined,
         messages: amsgs,
         tools: mapTools(tools),
         tool_choice: tools?.length ? ({ type: "auto" } as const) : undefined,
       };
 
+      if (options?.thinkingBudget && options.thinkingBudget > 0) {
+        params.thinking = { type: "enabled", budget_tokens: options.thinkingBudget };
+        params.max_tokens = Math.max(8192, options.thinkingBudget + 4096);
+      }
+      if (typeof options?.temperature === "number" && !options?.thinkingBudget) {
+        params.temperature = options.temperature;
+      }
+
       if (!onDelta) {
-        const res = await create(params);
+        const res = await create(params, timeoutMs);
         let text = "";
         const tcs: ToolCall[] = [];
         for (const b of res.content) {
-          if (b.type === "text") text += b.text;
-          else if (b.type === "tool_use")
+          const block = b as unknown as { type: string; text?: string; thinking?: string; id?: string; name?: string; input?: Record<string, unknown> };
+          if (block.type === "thinking" && block.thinking) {
+            text += `<think>\n${block.thinking}\n</think>\n\n`;
+          } else if (block.type === "text" && block.text) {
+            text += block.text;
+          } else if (block.type === "tool_use") {
             tcs.push({
-              id: b.id,
-              name: b.name,
-              args: (b.input as Record<string, unknown>) ?? {},
+              id: block.id!,
+              name: block.name!,
+              args: block.input ?? {},
             });
+          }
         }
         return {
           text,
@@ -156,21 +170,42 @@ export function createAnthropicClient(conn: ProviderConnection): LlmClient {
         };
       }
 
-      const stream = client.messages.stream(params as never, { timeout: 180_000 });
+      const stream = client.messages.stream(params as never, { timeout: timeoutMs });
+      let inThinking = false;
       for await (const event of stream) {
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        )
-          onDelta(event.delta.text);
+        if (event.type === "content_block_delta") {
+          const delta = (event as unknown as { delta: { type: string; text?: string; thinking?: string } }).delta;
+          if (delta.type === "thinking_delta" && delta.thinking) {
+            if (!inThinking) {
+              inThinking = true;
+              onDelta("<think>\n");
+            }
+            onDelta(delta.thinking);
+          } else if (delta.type === "text_delta" && delta.text) {
+            if (inThinking) {
+              inThinking = false;
+              onDelta("\n</think>\n\n");
+            }
+            onDelta(delta.text);
+          }
+        }
+      }
+      if (inThinking) {
+        inThinking = false;
+        onDelta("\n</think>\n\n");
       }
       const res = await stream.finalMessage();
       let text = "";
       const tcs: ToolCall[] = [];
       for (const b of res.content) {
-        if (b.type === "text") text += b.text;
-        else if (b.type === "tool_use")
-          tcs.push({ id: b.id, name: b.name, args: (b.input as Record<string, unknown>) ?? {} });
+        const block = b as unknown as { type: string; text?: string; thinking?: string; id?: string; name?: string; input?: Record<string, unknown> };
+        if (block.type === "thinking" && block.thinking) {
+          text += `<think>\n${block.thinking}\n</think>\n\n`;
+        } else if (block.type === "text" && block.text) {
+          text += block.text;
+        } else if (block.type === "tool_use") {
+          tcs.push({ id: block.id!, name: block.name!, args: block.input ?? {} });
+        }
       }
       return {
         text,

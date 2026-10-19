@@ -21,6 +21,12 @@
 
 import type Database from "better-sqlite3";
 
+import {
+  recordMemoryTombstone,
+  isMemoryTombstoned,
+  removeMemoryTombstone,
+} from "./governance/data-ownership";
+
 export interface MemoryItem {
   id: number;
   point: string;
@@ -53,9 +59,20 @@ export function addMemory(
   db: Database.Database,
   point: string,
   category = "fact",
+  options?: { source?: "user" | "agent" },
 ): MemoryItem {
   const cleanPoint = point.trim();
   if (!cleanPoint) throw new Error("Memory point cannot be empty");
+
+  const source = options?.source ?? "user";
+  if (source === "agent" && isMemoryTombstoned(db, cleanPoint)) {
+    throw new Error(`Cannot save memory: "${cleanPoint}" was previously deleted by the user.`);
+  }
+
+  // If user explicitly adds it, clear tombstone
+  if (source === "user") {
+    removeMemoryTombstone(db, cleanPoint);
+  }
 
   const now = Date.now();
   const res = db
@@ -73,6 +90,14 @@ export function addMemory(
 }
 
 export function deleteMemory(db: Database.Database, id: number): boolean {
+  const mem = db.prepare("SELECT point FROM memories WHERE id = ?").get(id) as
+    | { point: string }
+    | undefined;
+
+  if (mem?.point) {
+    recordMemoryTombstone(db, mem.point);
+  }
+
   const res = db.prepare("DELETE FROM memories WHERE id = ?").run(id);
   return res.changes > 0;
 }

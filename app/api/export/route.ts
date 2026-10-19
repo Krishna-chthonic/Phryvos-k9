@@ -13,6 +13,6 @@ export async function POST(req: Request) {
   if (!body || typeof body !== "object")
     return Response.json({ error: { code: "invalid_body", message: "Bad request body" } }, { status: 400 });
   const kind: "auto" | "manual" | "export" = body.kind === "auto" ? "auto" : body.kind === "manual" ? "manual" : "export";
-  const result = createExportBundle(kind);
+  const result = await createExportBundle(kind);
   return Response.json({ result }, { status: 201 });
 }

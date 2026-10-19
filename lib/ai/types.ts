@@ -59,6 +59,14 @@ export interface TurnResult {
 
 export type DeltaFn = (textDelta: string) => void;
 
+export interface TurnOptions {
+  reasoningEffort?: "low" | "medium" | "high";
+  thinkingBudget?: number;
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+
 /** One provider connection, bound to a model. */
 export interface LlmClient {
   /**
@@ -70,6 +78,7 @@ export interface LlmClient {
     tools: ToolSpec[] | undefined,
     model: string,
     onDelta?: DeltaFn,
+    options?: TurnOptions,
   ): Promise<TurnResult>;
 
   /** Cheap connectivity check with the given (or default) model. */

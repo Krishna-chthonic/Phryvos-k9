@@ -47,3 +47,8 @@ next-env.d.ts
 /backups/
 .phryvos.pid
 .phryvos.log
+
+# internal planning & reports
+*MASTER_PLAN*.md
+AUDIT_REPORT*.md
+*.plan.md

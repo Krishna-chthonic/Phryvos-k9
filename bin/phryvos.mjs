@@ -242,7 +242,10 @@ async function cmdUpdate() {
       }
 
       console.log(`${c.yellow}Pulling updates...${c.reset}`);
-      execSync("git pull", { cwd: ROOT_DIR, stdio: "inherit" });
+      try {
+        execSync("git checkout -- package-lock.json 2>/dev/null || true", { cwd: ROOT_DIR });
+      } catch {}
+      execSync("git reset --hard origin/main", { cwd: ROOT_DIR, stdio: "inherit" });
       
       console.log(`${c.blue}Updating dependencies and rebuilding...${c.reset}`);
       const env = getGlibcEnv();

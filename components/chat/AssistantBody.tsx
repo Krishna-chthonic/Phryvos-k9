@@ -21,6 +21,14 @@ export function AssistantBody({
 }) {
   const { thinking, answer, isThinkingLive } = parseThinking(body);
 
+  const hasThinking = Boolean(
+    thinking ||
+    (streaming && isThinkingLive) ||
+    (liveSteps && liveSteps.length > 0)
+  );
+
+  const isLive = Boolean(streaming && (isThinkingLive || (!answer && hasThinking)));
+
   if (!body && streaming) {
     return (
       <ThinkingAccordion
@@ -35,12 +43,10 @@ export function AssistantBody({
 
   return (
     <div className="text-sm">
-      {(thinking ||
-        (streaming && isThinkingLive) ||
-        (liveSteps && liveSteps.length > 0)) && (
+      {hasThinking && (
         <ThinkingAccordion
           thinking={thinking ?? ""}
-          isLive={streaming && (isThinkingLive || !answer)}
+          isLive={isLive}
           elapsed={elapsed}
           liveSteps={liveSteps}
           toolCalls={toolCalls}

@@ -283,6 +283,7 @@ Provide clear, helpful, accurate, and comprehensive responses across all topics.
 };
 
 export interface ResolvedLimits {
+  minSteps: number;
   maxSteps: number;
   providerTimeoutMs: number;
   autoApproveTools: boolean;
@@ -331,6 +332,7 @@ export function resolveExecutionLimits(
   const systemPrompt = [modeMeta.systemInstructions, effortMeta.systemModifier].join("\n\n");
 
   return {
+    minSteps: modeMeta.minSteps,
     maxSteps,
     providerTimeoutMs: timeoutMs,
     autoApproveTools: modeMeta.autoApproveTools,

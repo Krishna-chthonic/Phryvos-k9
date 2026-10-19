@@ -52,6 +52,12 @@ export interface LoopDeps {
   appendTool: (toolCallId: string, name: string, content: string) => void;
   /** Maximum tool steps allowed before forcing a conclusion */
   maxSteps?: number;
+  /** Minimum tool steps required before allowing early conclusion in research/deep modes */
+  minSteps?: number;
+  /** Active execution mode (research, thinking, coding, etc.) */
+  mode?: string;
+  /** Active effort level (low, medium, high, max, xhigh, ultra) */
+  effort?: string;
   /** Provider timeout in milliseconds */
   providerTimeoutMs?: number;
   /** If true, destructive tools are auto-approved without user prompt (e.g. autonomous Research mode) */
@@ -165,6 +171,31 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
       }
       messages.push({ role: "assistant", content: turn.text, toolCalls: turn.toolCalls });
     } else {
+      // Check if autonomous Research Mode or high-effort mode requires deeper exploration
+      const isResearchMode = deps.mode === "research";
+      const isUltraEffort = deps.effort === "ultra" || deps.effort === "xhigh" || deps.effort === "max";
+      const targetMinSteps = isResearchMode ? 6 : (isUltraEffort ? 4 : (deps.minSteps ?? 1));
+
+      const hasSavedDossier = allExecutedTools.some(
+        (tc) => tc.name === "write_file" && String(tc.args?.path ?? "").toLowerCase().includes("research")
+      );
+
+      if ((isResearchMode || isUltraEffort) && toolSteps < targetMinSteps && !signal?.aborted && !capped) {
+        emitThoughtDelta(`\n> 🔍 Autonomous Supervisor: Advancing inquiry into alternative angles, primary sources, and comprehensive empirical data (Phase ${toolSteps + 1}/${targetMinSteps})...\n`);
+        messages.push({ role: "assistant", content: turn.text || turnText });
+        messages.push({
+          role: "system",
+          content: `[AUTONOMOUS RESEARCH SUPERVISOR]: You are operating in ${deps.mode?.toUpperCase() ?? "RESEARCH"} mode with ${deps.effort?.toUpperCase() ?? "HIGH"} effort.
+Your current investigation has completed only ${toolSteps} tool steps and is not yet sufficiently deep.
+MANDATORY NEXT STEPS:
+1. Deepen your inquiry: Search for alternative viewpoints, empirical statistics, technical data, or recent benchmarks using web_search.
+2. Read the full content of authoritative URLs using web_fetch.
+3. ${isResearchMode && !hasSavedDossier ? "Synthesize all collected evidence and write an exhaustive, multi-section research dossier to the vault using write_file (e.g. /research/<topic-slug>-dossier.md)." : "Cross-verify all findings against known edge cases and empirical evidence."}
+4. Continue with your next tool calls now. Do not terminate prematurely.`,
+        });
+        continue;
+      }
+
       // Final turn: conclusion reached!
       closeThoughtBlock();
       const finalText = (accumulatedThought ? accumulatedThought : "") + (turn.text || turnText);

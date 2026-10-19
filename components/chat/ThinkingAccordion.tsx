@@ -10,36 +10,71 @@ export function parseThinking(raw: string): {
   answer: string;
   isThinkingLive: boolean;
 } {
-  let openTag = "";
-  let closeTag = "";
-  let thinkStart = raw.indexOf("<think>");
-  if (thinkStart !== -1) {
-    openTag = "<think>";
-    closeTag = "</think>";
-  } else {
-    thinkStart = raw.indexOf("<thought>");
-    if (thinkStart !== -1) {
-      openTag = "<thought>";
-      closeTag = "</thought>";
+  if (!raw) return { thinking: null, answer: "", isThinkingLive: false };
+
+  const tagPatterns = [
+    { open: "<think>", close: "</think>" },
+    { open: "<thought>", close: "</thought>" },
+    { open: "<thinking>", close: "</thinking>" },
+  ];
+
+  let currentText = raw;
+  const allThoughts: string[] = [];
+  let isThinkingLive = false;
+
+  let found = true;
+  while (found) {
+    found = false;
+    let earliestStart = -1;
+    let matchingPattern: { open: string; close: string } | null = null;
+
+    for (const pat of tagPatterns) {
+      const idx = currentText.toLowerCase().indexOf(pat.open);
+      if (idx !== -1 && (earliestStart === -1 || idx < earliestStart)) {
+        earliestStart = idx;
+        matchingPattern = pat;
+      }
+    }
+
+    if (earliestStart !== -1 && matchingPattern) {
+      found = true;
+      const endTagIdx = currentText.toLowerCase().indexOf(
+        matchingPattern.close,
+        earliestStart + matchingPattern.open.length,
+      );
+
+      if (endTagIdx === -1) {
+        // Unclosed thinking tag at the end (currently streaming live thinking)
+        const liveThought = currentText.slice(earliestStart + matchingPattern.open.length);
+        if (liveThought.trim()) {
+          allThoughts.push(liveThought.trim());
+        }
+        currentText = currentText.slice(0, earliestStart);
+        isThinkingLive = true;
+        break;
+      } else {
+        // Closed thinking block
+        const thoughtContent = currentText.slice(
+          earliestStart + matchingPattern.open.length,
+          endTagIdx,
+        );
+        if (thoughtContent.trim()) {
+          allThoughts.push(thoughtContent.trim());
+        }
+        currentText =
+          currentText.slice(0, earliestStart) +
+          currentText.slice(endTagIdx + matchingPattern.close.length);
+      }
     }
   }
 
-  if (thinkStart === -1) {
-    return { thinking: null, answer: raw, isThinkingLive: false };
-  }
-  const thinkEnd = raw.indexOf(closeTag, thinkStart);
-  if (thinkEnd === -1) {
-    return {
-      thinking: raw.slice(thinkStart + openTag.length).trim(),
-      answer: raw.slice(0, thinkStart).trim(),
-      isThinkingLive: true,
-    };
-  }
-  const thinking = raw.slice(thinkStart + openTag.length, thinkEnd).trim();
-  const answer = (
-    raw.slice(0, thinkStart) + raw.slice(thinkEnd + closeTag.length)
-  ).trim();
-  return { thinking, answer, isThinkingLive: false };
+  // Strip any accidental dangling closing tags
+  currentText = currentText.replace(/<\/(?:think|thought|thinking)>/gi, "").trim();
+
+  const thinking = allThoughts.length > 0 ? allThoughts.join("\n\n---\n\n") : null;
+  const answer = currentText.trim();
+
+  return { thinking, answer, isThinkingLive };
 }
 
 export function renderThinkingContent(text: string) {
@@ -122,9 +157,11 @@ export function ThinkingAccordion({
   const words = thinking ? thinking.split(/\s+/).filter(Boolean).length : 0;
   const contentRef = useRef<HTMLDivElement | null>(null);
 
-  // When live streaming finishes, automatically collapse into compact summary
+  // When live streaming starts, expand; when live streaming finishes, automatically collapse into compact summary
   useEffect(() => {
-    if (prevLiveRef.current && !isLive) {
+    if (isLive) {
+      setUserToggled(true);
+    } else if (prevLiveRef.current && !isLive) {
       setUserToggled(false);
     }
     prevLiveRef.current = isLive;
@@ -171,11 +208,10 @@ export function ThinkingAccordion({
               </>
             ) : (
               <span>
-                Thinking Process ({words} words
+                Thought for {elapsed && elapsed > 0 ? `${elapsed}s` : `${words} words`}
                 {totalTools > 0
                   ? ` · ${totalTools} ${totalTools === 1 ? "tool" : "tools"}`
                   : ""}
-                )
               </span>
             )}
           </span>

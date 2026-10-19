@@ -126,11 +126,16 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
       if (options?.reasoningEffort) {
         base.reasoning_effort = options.reasoningEffort;
       }
+      if (options?.thinkingBudget && options.thinkingBudget > 0) {
+        base.thinking = { type: "enabled", budget_tokens: options.thinkingBudget };
+      }
       if (typeof options?.temperature === "number") {
         base.temperature = options.temperature;
       }
       if (typeof options?.maxTokens === "number") {
         base.max_tokens = options.maxTokens;
+      } else if (options?.thinkingBudget) {
+        base.max_tokens = Math.max(16384, options.thinkingBudget + 4096);
       }
       const timeoutMs = options?.timeoutMs ?? 180_000;
 
@@ -204,7 +209,7 @@ export function createOpenAiCompatibleClient(conn: ProviderConnection): LlmClien
         }
 
         if (delta.content) {
-          if (inThinking) {
+          if (inThinking && !reasoning) {
             inThinking = false;
             text += "\n</think>\n\n";
             onDelta("\n</think>\n\n");

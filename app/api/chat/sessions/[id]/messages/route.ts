@@ -154,28 +154,29 @@ export async function POST(
           }
         }
 
-        // Use Dynamic Semantic Router for optimal model selection
+        // Use Dynamic Semantic Router for model selection only when model is "auto" or not specified
         let routedModel = model;
         let routedProviderId = providerId;
-        try {
-          const router = createRouter(ctx);
-          const lastUserMsg = [...augmentedMessages].reverse().find(m => m.role === "user");
-          if (lastUserMsg && typeof lastUserMsg.content === "string") {
-            const decision = await router.route(lastUserMsg.content, { providerId, model });
-            routedModel = decision.model;
-            routedProviderId = decision.providerId;
-            // Re-create client if provider changed
-            if (routedProviderId !== providerId) {
-              client = createLlmClient(ctx, routedProviderId);
+        if (!model || model === "auto") {
+          try {
+            const router = createRouter(ctx);
+            const lastUserMsg = [...augmentedMessages].reverse().find(m => m.role === "user");
+            if (lastUserMsg && typeof lastUserMsg.content === "string") {
+              const decision = await router.route(lastUserMsg.content, { providerId, model });
+              routedModel = decision.model;
+              routedProviderId = decision.providerId;
+              if (routedProviderId !== providerId) {
+                client = createLlmClient(ctx, routedProviderId);
+              }
+              console.log(`[Router] ${decision.reasoning}`);
             }
-            console.log(`[Router] ${decision.reasoning}`);
+          } catch (e) {
+            console.warn("[Router] Routing failed, using original:", e);
           }
-        } catch (e) {
-          console.warn("[Router] Routing failed, using original:", e);
         }
 
         // Resolve execution limits & system prompt for Mode and Effort level
-        const { maxSteps, providerTimeoutMs, autoApproveTools, systemPrompt, turnOptions } =
+        const { minSteps, maxSteps, providerTimeoutMs, autoApproveTools, systemPrompt, turnOptions } =
           resolveExecutionLimits(input.mode, input.effort);
 
         augmentedMessages = [
@@ -200,6 +201,9 @@ export async function POST(
             model: routedModel,
             initialMessages: augmentedMessages,
             signal: req.signal,
+            mode: input.mode,
+            effort: input.effort,
+            minSteps,
             maxSteps,
             providerTimeoutMs,
             autoApproveTools,

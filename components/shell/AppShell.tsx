@@ -31,6 +31,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Keyboard,
+  Bot,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CommandPalette } from "@/components/shell/CommandPalette";
@@ -40,6 +41,7 @@ import { cyberAudio } from "@/lib/audio/cyberdeck-audio";
 
 const NAV = [
   { href: "/chat", label: "Chat", icon: MessageSquare, description: "AI Agent & Data" },
+  { href: "/dots", label: "Dots", icon: Bot, description: "AI Coworkers" },
   { href: "/vault", label: "Files", icon: Folder, description: "Encrypted Storage" },
   { href: "/tasks", label: "Tasks", icon: ListChecks, description: "Daily & Recurring" },
   { href: "/projects", label: "Projects", icon: SquareKanban, description: "Kanban & Gantt" },
@@ -161,12 +163,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [lock, toggleSidebar]);
 
   const currentNav = NAV.find((n) => pathname.startsWith(n.href)) ?? NAV[0];
-  const isChat = pathname.startsWith("/chat");
+  const isFullView = pathname.startsWith("/chat") || pathname.startsWith("/dots");
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors">
-      {/* Mobile Top Header (Hidden on /chat to keep single unified top bar) */}
-      {!isChat && (
+      {/* Mobile Top Header (Hidden on /chat and /dots to keep single unified top bar) */}
+      {!isFullView && (
         <header className="fixed top-0 inset-x-0 z-30 flex h-14 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 md:hidden">
           <button
             onClick={() => setMobileOpen(true)}
@@ -479,7 +481,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className={`flex-1 min-w-0 flex flex-col h-full overflow-hidden ${isChat ? "pt-0" : "pt-14 md:pt-0"} bg-white dark:bg-zinc-950`}>
+      <main className={`flex-1 min-w-0 flex flex-col h-full overflow-hidden ${isFullView ? "pt-0" : "pt-14 md:pt-0"} bg-white dark:bg-zinc-950`}>
         {children}
       </main>
 

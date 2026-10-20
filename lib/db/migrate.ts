@@ -70,6 +70,42 @@ export function runMigrations(db: Database.Database): void {
       deleted_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_memory_tombstones_hash ON memory_tombstones(content_hash);
+    CREATE TABLE IF NOT EXISTS dots (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      character TEXT NOT NULL DEFAULT 'blue',
+      role TEXT NOT NULL,
+      description TEXT,
+      system_prompt TEXT NOT NULL,
+      model TEXT DEFAULT 'auto',
+      tools TEXT NOT NULL DEFAULT '["terminal","vault","web_search","web_fetch"]',
+      status TEXT NOT NULL DEFAULT 'idle',
+      working_directory TEXT DEFAULT '/workspace',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dot_messages (
+      id TEXT PRIMARY KEY,
+      dot_id TEXT NOT NULL REFERENCES dots(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tool_name TEXT,
+      tool_args TEXT,
+      tool_result TEXT,
+      status TEXT DEFAULT 'done',
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_dot_messages_dot ON dot_messages(dot_id);
+    CREATE INDEX IF NOT EXISTS idx_dot_messages_created ON dot_messages(created_at);
+    CREATE TABLE IF NOT EXISTS dot_spaces (
+      id TEXT PRIMARY KEY,
+      dot_id TEXT NOT NULL REFERENCES dots(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_dot_spaces_dot ON dot_spaces(dot_id);
     CREATE TABLE IF NOT EXISTS schema_versions (
       version INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -80,6 +116,76 @@ export function runMigrations(db: Database.Database): void {
     INSERT OR IGNORE INTO schema_versions (version, name, applied_at, checksum, execution_time_ms)
     VALUES (1, '0001_baseline_drizzle_and_virtual_tables', strftime('%s','now')*1000, 'baseline', 0);
   `);
+
+  // Default seed the 4 specialist Dots if table is empty
+  const dotCount = (db.prepare("SELECT COUNT(*) as count FROM dots").get() as { count: number }).count;
+  if (dotCount === 0) {
+    const now = Date.now();
+    const insertDot = db.prepare(`
+      INSERT INTO dots (id, name, character, role, description, system_prompt, model, tools, status, working_directory, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertDot.run(
+      "neo",
+      "Neo",
+      "blue",
+      "Lead Software Engineer",
+      "Specialist in bash commands, code architecture, git automation, and debugging.",
+      "You are Neo, an always-on AI software coworker in Phryvos-K9. You have terminal access, file system tools, and deep code engineering capabilities. You write modular, clean code, verify your changes, and provide clear progress updates.",
+      "auto",
+      JSON.stringify(["terminal", "vault", "web_search", "web_fetch"]),
+      "idle",
+      "/root/phryvos-k9",
+      now,
+      now
+    );
+
+    insertDot.run(
+      "nova",
+      "Nova",
+      "mint",
+      "Autonomous Deep Researcher",
+      "Specialist in autonomous web investigation, cross-verifying citations, and synthesizing comprehensive dossiers.",
+      "You are Nova, an always-on AI researcher coworker in Phryvos-K9. You investigate complex inquiries across multiple angles, browse authoritative sources, and save thorough research dossiers to the vault.",
+      "auto",
+      JSON.stringify(["vault", "web_search", "web_fetch"]),
+      "idle",
+      "/vault/research",
+      now,
+      now
+    );
+
+    insertDot.run(
+      "atlas",
+      "Atlas",
+      "orange",
+      "Vault Scribe & Operations",
+      "Specialist in organizing vault notes, structuring projects, managing daily priorities, and knowledge synthesis.",
+      "You are Atlas, an always-on AI operations coworker in Phryvos-K9. You manage vault documents, prioritize tasks, organize notes, and maintain structured workflows.",
+      "auto",
+      JSON.stringify(["vault", "tasks", "projects"]),
+      "idle",
+      "/vault",
+      now,
+      now
+    );
+
+    insertDot.run(
+      "socrates",
+      "Socrates",
+      "purple",
+      "Exam & Socratic Tutor",
+      "Specialist in deep conceptual coaching, mathematical derivations, Socratic dialogues, and exam prep.",
+      "You are Socrates, an always-on AI tutor coworker in Phryvos-K9. You guide learners through first-principles explanations, test understanding with targeted questions, and simplify complex derivations.",
+      "auto",
+      JSON.stringify(["vault", "web_search", "python_runner"]),
+      "idle",
+      "/vault/study",
+      now,
+      now
+    );
+  }
   // The vault root is a materialized directory row (vault-service relies on it).
   db.prepare(
     "INSERT OR IGNORE INTO files (path, name, is_dir, version, created_at, updated_at) VALUES ('/', '/', 1, 1, strftime('%s','now')*1000, strftime('%s','now')*1000)",

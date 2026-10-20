@@ -366,3 +366,48 @@ export const memoryConsolidation = sqliteTable(
   ],
 );
 
+// OpenDots — Always-On AI Coworkers schema
+export const dots = sqliteTable("dots", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  character: text("character").notNull().default("blue"), // "blue" | "mint" | "orange" | "purple"
+  role: text("role").notNull(),
+  description: text("description"),
+  systemPrompt: text("system_prompt").notNull(),
+  model: text("model").default("auto"),
+  tools: text("tools").notNull().default("[]"), // JSON string array of enabled tools
+  status: text("status").notNull().default("idle"), // "idle" | "working" | "paused" | "complete" | "needs-input"
+  workingDirectory: text("working_directory").default("/workspace"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const dotMessages = sqliteTable(
+  "dot_messages",
+  {
+    id: text("id").primaryKey(),
+    dotId: text("dot_id").notNull().references(() => dots.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // "user" | "assistant" | "system" | "tool"
+    content: text("content").notNull(),
+    toolName: text("tool_name"),
+    toolArgs: text("tool_args"),
+    toolResult: text("tool_result"),
+    status: text("status").default("done"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("idx_dot_messages_dot").on(t.dotId), index("idx_dot_messages_created").on(t.createdAt)],
+);
+
+export const dotSpaces = sqliteTable(
+  "dot_spaces",
+  {
+    id: text("id").primaryKey(),
+    dotId: text("dot_id").notNull().references(() => dots.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("idx_dot_spaces_dot").on(t.dotId)],
+);
+

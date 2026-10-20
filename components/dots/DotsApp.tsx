@@ -1,0 +1,236 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
+import { DotRoster } from "./DotRoster";
+import { DotWorkspace } from "./DotWorkspace";
+import { NewDotDialog } from "./NewDotDialog";
+import { DotCallModal } from "./DotCallModal";
+import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
+import { Loader2 } from "lucide-react";
+
+export function DotsApp() {
+  const [dots, setDots] = useState<DotDto[]>([]);
+  const [selectedDotId, setSelectedDotId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DotMessageDto[]>([]);
+  const [spaces, setSpaces] = useState<DotSpaceDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [mobileRosterOpen, setMobileRosterOpen] = useState(false);
+  const [newDotDialogOpen, setNewDotDialogOpen] = useState(false);
+  const [callModalOpen, setCallModalOpen] = useState(false);
+
+  // Streaming state
+  const [streaming, setStreaming] = useState(false);
+  const [streamText, setStreamText] = useState("");
+
+  const activeDot = dots.find((d) => d.id === selectedDotId) || dots[0] || null;
+
+  // Load all dots
+  const loadDots = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dots");
+      if (res.ok) {
+        const data = await res.json();
+        setDots(data.dots || []);
+        if (!selectedDotId && data.dots && data.dots.length > 0) {
+          setSelectedDotId(data.dots[0].id);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load dots", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedDotId]);
+
+  // Load single dot details (messages & spaces)
+  const loadDotDetails = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/dots/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+        setSpaces(data.spaces || []);
+      }
+    } catch (e) {
+      console.error("Failed to load dot details", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDots();
+  }, [loadDots]);
+
+  useEffect(() => {
+    if (activeDot) {
+      loadDotDetails(activeDot.id);
+    }
+  }, [activeDot?.id, loadDotDetails]);
+
+  // Send message to active dot via SSE
+  const handleSendMessage = async (content: string) => {
+    if (!activeDot || streaming) return;
+
+    // Optimistic user message
+    const tempId = `temp_${Date.now()}`;
+    const userMsg: DotMessageDto = {
+      id: tempId,
+      dotId: activeDot.id,
+      role: "user",
+      content,
+      createdAt: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    setStreaming(true);
+    setStreamText("");
+
+    try {
+      const res = await fetch(`/api/dots/${activeDot.id}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to communicate with Dot");
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const block of lines) {
+          if (!block.trim()) continue;
+          const matchEvent = block.match(/^event:\s*(\w+)/m);
+          const matchData = block.match(/^data:\s*(.*)$/m);
+          const event = matchEvent ? matchEvent[1] : "message";
+          const rawData = matchData ? matchData[1] : "";
+
+          let data: Record<string, unknown> = {};
+          try {
+            data = JSON.parse(rawData);
+          } catch {}
+
+          if (event === "delta" && data.text) {
+            accumulated += data.text as string;
+            setStreamText(accumulated);
+          } else if (event === "step") {
+            const step = data as { tool?: string; result?: string };
+            if (step.tool) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `tool_${Date.now()}_${Math.random()}`,
+                  dotId: activeDot.id,
+                  role: "tool",
+                  content: step.result || "Executed tool " + step.tool,
+                  toolName: step.tool,
+                  createdAt: Date.now(),
+                },
+              ]);
+            }
+          }
+        }
+      }
+
+      // Reload fresh messages from DB
+      await loadDotDetails(activeDot.id);
+      await loadDots();
+    } catch (e) {
+      console.error("Chat error", e);
+    } finally {
+      setStreaming(false);
+      setStreamText("");
+    }
+  };
+
+  const handleUpdateDot = async (updates: Partial<DotDto>) => {
+    if (!activeDot) return;
+    try {
+      const res = await fetch(`/api/dots/${activeDot.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        await loadDots();
+      }
+    } catch (e) {
+      console.error("Failed to update dot", e);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-white dark:bg-zinc-950">
+        <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-white dark:bg-zinc-950">
+      {/* Coworker Roster Sidebar */}
+      <DotRoster
+        dots={dots}
+        selectedDotId={activeDot?.id || null}
+        onSelectDot={(id) => setSelectedDotId(id)}
+        onOpenNewDotDialog={() => setNewDotDialogOpen(true)}
+        mobileOpen={mobileRosterOpen}
+        onCloseMobile={() => setMobileRosterOpen(false)}
+      />
+
+      {/* Main Workspace */}
+      {activeDot ? (
+        <DotWorkspace
+          dot={activeDot}
+          messages={messages}
+          spaces={spaces}
+          onSendMessage={handleSendMessage}
+          onRefreshSpaces={() => loadDotDetails(activeDot.id)}
+          onOpenCall={() => setCallModalOpen(true)}
+          onToggleRoster={() => setMobileRosterOpen((prev) => !prev)}
+          streaming={streaming}
+          streamText={streamText}
+          onUpdateDot={handleUpdateDot}
+        />
+      ) : (
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-zinc-400">
+          No active Dot selected.
+        </div>
+      )}
+
+      {/* New Dot Modal */}
+      <NewDotDialog
+        open={newDotDialogOpen}
+        onClose={() => setNewDotDialogOpen(false)}
+        onCreated={(newDot) => {
+          setDots((prev) => [...prev, newDot]);
+          setSelectedDotId(newDot.id);
+        }}
+      />
+
+      {/* Voice Call Modal */}
+      {activeDot && (
+        <DotCallModal
+          open={callModalOpen}
+          onClose={() => setCallModalOpen(false)}
+          name={activeDot.name}
+          role={activeDot.role}
+          character={activeDot.character}
+        />
+      )}
+    </div>
+  );
+}

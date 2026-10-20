@@ -89,8 +89,8 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900">
-              <Sparkles className="h-4.5 w-4.5 text-emerald-400 dark:text-emerald-600" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-xs dark:bg-zinc-800 dark:text-zinc-100">
+              <Sparkles className="h-4.5 w-4.5 text-emerald-400" />
             </div>
             <div>
               <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
@@ -160,7 +160,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
                 placeholder="e.g. Neo, Cypher, Orion"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 transition"
+                className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 transition"
               />
             </div>
             <div>
@@ -173,7 +173,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
                 placeholder="e.g. Senior Backend Engineer"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 transition"
+                className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 transition"
               />
             </div>
           </div>
@@ -188,7 +188,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
               placeholder="What does this coworker do?"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 transition"
+              className="w-full h-9 rounded-xl border border-zinc-200 bg-zinc-50/70 px-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 transition"
             />
           </div>
 
@@ -203,7 +203,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
               placeholder="Define instructions, personality, guidelines, and work style for this Dot..."
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 transition resize-none leading-relaxed"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 transition resize-none leading-relaxed"
             />
           </div>
 
@@ -243,7 +243,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
                     <div
                       className={`flex h-5 w-5 items-center justify-center rounded-md border ${
                         isChecked
-                          ? "bg-zinc-900 border-zinc-900 text-white dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900"
+                          ? "bg-zinc-900 border-zinc-900 text-white dark:bg-emerald-600 dark:border-emerald-600 dark:text-white"
                           : "border-zinc-300 dark:border-zinc-700"
                       }`}
                     >
@@ -260,14 +260,14 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 transition"
+              className="rounded-xl px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-xl bg-zinc-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-95 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 transition"
+              className="rounded-xl bg-zinc-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-95 disabled:opacity-50 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 transition cursor-pointer"
             >
               {submitting ? "Spawning Dot…" : "Spawn Dot"}
             </button>

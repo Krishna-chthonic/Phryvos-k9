@@ -6,6 +6,7 @@ import { DotWorkspace } from "./DotWorkspace";
 import { NewDotDialog } from "./NewDotDialog";
 import { DotCallModal } from "./DotCallModal";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
+import { providersApi, type ProviderMeta } from "@/lib/chat-client";
 import { Loader2 } from "lucide-react";
 
 export function DotsApp() {
@@ -15,14 +16,45 @@ export function DotsApp() {
   const [spaces, setSpaces] = useState<DotSpaceDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [mobileRosterOpen, setMobileRosterOpen] = useState(false);
+  const [desktopRosterOpen, setDesktopRosterOpen] = useState(true);
   const [newDotDialogOpen, setNewDotDialogOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
+
+  // Provider & Model state
+  const [providers, setProviders] = useState<ProviderMeta[]>([]);
+  const [providerId, setProviderId] = useState<number | "">("");
+  const [selectedModel, setSelectedModel] = useState<string>("");
 
   // Streaming state
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
 
   const activeDot = dots.find((d) => d.id === selectedDotId) || dots[0] || null;
+
+  // Load providers
+  useEffect(() => {
+    providersApi
+      .list()
+      .then((r) => {
+        const list = r.providers || [];
+        setProviders(list);
+        const def = list.find((p) => p.isDefault) ?? list[0];
+        if (def) {
+          setProviderId(def.id);
+          if (!selectedModel) {
+            setSelectedModel(def.models[0] ?? "");
+          }
+        }
+      })
+      .catch((e) => console.error("Failed to load providers", e));
+  }, []);
+
+  // Sync model with activeDot
+  useEffect(() => {
+    if (activeDot && activeDot.model && activeDot.model !== "auto") {
+      setSelectedModel(activeDot.model);
+    }
+  }, [activeDot?.id, activeDot?.model]);
 
   // Load all dots
   const loadDots = useCallback(async () => {
@@ -66,6 +98,26 @@ export function DotsApp() {
     }
   }, [activeDot?.id, loadDotDetails]);
 
+  // Update provider / model handlers
+  const handleSelectProvider = (pid: number | "") => {
+    setProviderId(pid);
+    const p = providers.find((x) => x.id === pid);
+    if (p && p.models.length > 0) {
+      const firstModel = p.models[0];
+      setSelectedModel(firstModel);
+      if (activeDot) {
+        handleUpdateDot({ model: firstModel });
+      }
+    }
+  };
+
+  const handleSelectModel = (m: string) => {
+    setSelectedModel(m);
+    if (activeDot) {
+      handleUpdateDot({ model: m });
+    }
+  };
+
   // Send message to active dot via SSE
   const handleSendMessage = async (content: string) => {
     if (!activeDot || streaming) return;
@@ -88,7 +140,11 @@ export function DotsApp() {
       const res = await fetch(`/api/dots/${activeDot.id}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          model: selectedModel || undefined,
+          providerId: providerId === "" ? undefined : providerId,
+        }),
       });
 
       if (!res.ok) {
@@ -180,7 +236,7 @@ export function DotsApp() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-white dark:bg-zinc-950">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
       {/* Coworker Roster Sidebar */}
       <DotRoster
         dots={dots}
@@ -189,6 +245,7 @@ export function DotsApp() {
         onOpenNewDotDialog={() => setNewDotDialogOpen(true)}
         mobileOpen={mobileRosterOpen}
         onCloseMobile={() => setMobileRosterOpen(false)}
+        desktopOpen={desktopRosterOpen}
       />
 
       {/* Main Workspace */}
@@ -201,9 +258,16 @@ export function DotsApp() {
           onRefreshSpaces={() => loadDotDetails(activeDot.id)}
           onOpenCall={() => setCallModalOpen(true)}
           onToggleRoster={() => setMobileRosterOpen((prev) => !prev)}
+          onToggleDesktopRoster={() => setDesktopRosterOpen((prev) => !prev)}
+          desktopRosterOpen={desktopRosterOpen}
           streaming={streaming}
           streamText={streamText}
           onUpdateDot={handleUpdateDot}
+          providers={providers}
+          providerId={providerId}
+          selectedModel={selectedModel}
+          onSelectProvider={handleSelectProvider}
+          onSelectModel={handleSelectModel}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-zinc-400">

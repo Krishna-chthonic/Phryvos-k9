@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
 import { getDot, updateDot, listDotMessages, appendDotMessage } from "@/lib/dots-service";
-import { createLlmClient, defaultProvider } from "@/lib/providers-service";
+import { createLlmClient, defaultProvider, listProviders } from "@/lib/providers-service";
 import { runAgentTurn } from "@/lib/agent/loop";
 import { ensureAgentTools } from "@/lib/agent/tools";
 import type { UnifiedMessage } from "@/lib/ai/types";
@@ -9,6 +9,7 @@ import type { UnifiedMessage } from "@/lib/ai/types";
 const ChatBodySchema = z.object({
   content: z.string().min(1),
   model: z.string().optional(),
+  providerId: z.number().optional(),
 });
 
 export async function POST(
@@ -49,7 +50,11 @@ export async function POST(
     ];
 
     // Determine LLM provider & client
-    const provider = defaultProvider(ctx);
+    const allProviders = listProviders(ctx);
+    const provider = (parsed.providerId ? allProviders.find((p) => p.id === parsed.providerId) : null)
+      ?? defaultProvider(ctx)
+      ?? allProviders[0];
+
     if (!provider) {
       updateDot(ctx, id, { status: "idle" });
       return Response.json(
@@ -59,7 +64,7 @@ export async function POST(
     }
 
     const client = createLlmClient(ctx, provider.id);
-    const selectedModel = parsed.model || dot.model === "auto" ? (provider.models[0] || "default") : dot.model;
+    const selectedModel = parsed.model || (dot.model !== "auto" ? dot.model : (provider.models[0] || "default"));
 
     // Stream SSE response
     const stream = new TransformStream();

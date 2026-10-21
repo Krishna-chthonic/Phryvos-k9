@@ -87,6 +87,7 @@ import {
 import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
 import { aipexBridge } from "@/lib/browser/aipex-bridge";
 import { browserSkill } from "@/lib/browser/browserskill-engine";
+import { hybridDigUpSearch, indexVaultForDigUp, getDigUpStats } from "@/lib/search/digup-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1386,6 +1387,41 @@ async function toolBskCli(ctx: VaultCtx, a: { command: string; sessionId?: strin
     return output;
   } catch (err) {
     return `Error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- digup (hybrid code/doc search)
+
+async function toolDigUpSearch(ctx: VaultCtx, a: { query: string; limit?: number; fileTypes?: string[] }) {
+  try {
+    const hits = await hybridDigUpSearch(ctx, a.query, { limit: a.limit, fileTypes: a.fileTypes });
+    if (hits.length === 0) return `DigUp found no semantic or exact matches for: "${a.query}"`;
+    return hits
+      .map(
+        (h, i) =>
+          `[#${i + 1}] ${h.filePath} (${h.matchType.toUpperCase()} | score: ${h.score} | lang: ${h.language})\n${h.snippet.slice(0, 300)}...`,
+      )
+      .join("\n\n---\n\n");
+  } catch (err) {
+    return `DigUp search error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolDigUpIndex(ctx: VaultCtx, a: { dirPath?: string }) {
+  try {
+    const res = await indexVaultForDigUp(ctx, a.dirPath || "/");
+    return `DigUp indexing complete: ${res.indexedFiles} files, ${res.totalChunks} code/doc chunks indexed into vector + FTS5 store.`;
+  } catch (err) {
+    return `DigUp indexing error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolDigUpStats(ctx: VaultCtx) {
+  try {
+    const stats = await getDigUpStats(ctx);
+    return `DigUp Code Engine Stats:\n- Files Indexed: ${stats.totalFiles}\n- Total Chunks: ${stats.totalChunks}\n- Total Tokens: ${stats.totalTokens}\n- Last Updated: ${new Date(stats.lastIndexedAt || Date.now()).toISOString()}`;
+  } catch (err) {
+    return `DigUp stats error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -2750,6 +2786,52 @@ export function ensureAgentTools(): void {
       command: z.string(),
       sessionId: z.string().optional(),
     }),
+  );
+
+  reg(
+    "digup_search",
+    "Perform on-device hybrid semantic + FTS5 code and document search across the vault using Reciprocal Rank Fusion (RRF). Finds code by architectural purpose or intent.",
+    P(
+      "digup_search",
+      "Hybrid semantic code & document search",
+      { query: { type: "string", description: "Search query or natural language code intent" } },
+      {
+        limit: { type: "number", description: "Max results (default: 10)" },
+        fileTypes: { type: "array", description: "Filter by file extensions (e.g. ['.ts', '.py', '.md'])" },
+      },
+    ),
+    (c, a) => toolDigUpSearch(c, a),
+    false,
+    z.object({
+      query: z.string(),
+      limit: z.number().optional(),
+      fileTypes: z.array(z.string()).optional(),
+    }),
+  );
+
+  reg(
+    "digup_index",
+    "Index or re-index vault code and text files for hybrid semantic RRF search with syntax-aware language chunking.",
+    P(
+      "digup_index",
+      "Index vault for hybrid code search",
+      {},
+      { dirPath: { type: "string", description: "Vault directory path to index (default: '/')" } },
+    ),
+    (c, a) => toolDigUpIndex(c, a),
+    false,
+    z.object({
+      dirPath: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "digup_stats",
+    "Retrieve statistics about the DigUp on-device hybrid code search index.",
+    P("digup_stats", "Get DigUp index stats", {}),
+    (c) => toolDigUpStats(c),
+    false,
+    z.object({}),
   );
 }
 

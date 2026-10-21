@@ -19,6 +19,7 @@ import { TelegramGatewayPanel } from "@/components/settings/TelegramGatewayPanel
 import { AgentReachPanel } from "@/components/settings/AgentReachPanel";
 import { FreeModelsPanel } from "@/components/settings/FreeModelsPanel";
 import { PluginManagerPanel } from "@/components/settings/PluginManagerPanel";
+import { DigUpPanel } from "@/components/settings/DigUpPanel";
 import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -43,6 +44,7 @@ export default function SettingsPage() {
         <McpPanel />
         <AIPexBridgePanel />
         <PluginManagerPanel />
+        <DigUpPanel />
         <FreeModelsPanel />
         <ProvidersPanel />
         <SystemPromptPanel />

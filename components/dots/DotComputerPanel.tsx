@@ -33,21 +33,29 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
   const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // OpenBrowser State (ntegrals/openbrowser)
+  // OpenBrowser State (ntegrals/openbrowser) & Tencent BrowserSkill
   const [browserUrl, setBrowserUrl] = useState("https://en.wikipedia.org/wiki/Autonomous_agent");
   const [browserSession, setBrowserSession] = useState<any>(null);
   const [browserLoading, setBrowserLoading] = useState(false);
-  const [browserViewTab, setBrowserViewTab] = useState<"dom" | "text">("dom");
+  const [browserViewTab, setBrowserViewTab] = useState<"dom" | "text" | "telemetry">("dom");
+  const [telemetry, setTelemetry] = useState<{ consoleLogs: any[]; networkLogs: any[] }>({ consoleLogs: [], networkLogs: [] });
 
   const loadBrowserSession = React.useCallback(async () => {
     try {
-      const res = await fetch(`/api/browser?session=${dot.id}`);
-      if (res.ok) {
-        const json = await res.json();
+      const [resSession, resTelemetry] = await Promise.all([
+        fetch(`/api/browser?session=${dot.id}`),
+        fetch(`/api/browser/skill`),
+      ]);
+      if (resSession.ok) {
+        const json = await resSession.json();
         setBrowserSession(json.session);
         if (json.session.currentUrl && json.session.currentUrl !== "about:blank") {
           setBrowserUrl(json.session.currentUrl);
         }
+      }
+      if (resTelemetry.ok) {
+        const json = await resTelemetry.json();
+        setTelemetry({ consoleLogs: json.consoleLogs || [], networkLogs: json.networkLogs || [] });
       }
     } catch {}
   }, [dot.id]);
@@ -119,6 +127,29 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
     if (!cmd || running) return;
 
     setRunning(true);
+
+    // Tencent BrowserSkill CLI interception
+    if (cmd.startsWith("bsk") || cmd.startsWith("./bsk")) {
+      try {
+        const res = await fetch("/api/browser/skill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: cmd, sessionId: dot.id }),
+        });
+        const data = await res.json();
+        const outputText = data.output || (data.success ? "✔ Done" : `❌ ${data.error}`);
+        setOutput((prev) => `${prev ? prev + "\n\n" : ""}$ ${cmd}\n${outputText}`);
+        if (!cmdToRun) setCommand("");
+        void loadBrowserSession();
+        return;
+      } catch (e) {
+        setOutput((prev) => `${prev ? prev + "\n\n" : ""}$ ${cmd}\n❌ Error: ${e instanceof Error ? e.message : "Execution failed"}`);
+        return;
+      } finally {
+        setRunning(false);
+      }
+    }
+
     try {
       const res = await fetch(`/api/dots/${dot.id}/terminal`, {
         method: "POST",
@@ -372,6 +403,14 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
                     >
                       Page Text
                     </button>
+                    <button
+                      onClick={() => setBrowserViewTab("telemetry")}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                        browserViewTab === "telemetry" ? "bg-zinc-800 text-sky-400" : "text-zinc-500"
+                      }`}
+                    >
+                      Telemetry ({telemetry.networkLogs.length + telemetry.consoleLogs.length})
+                    </button>
                   </div>
                 </div>
               </div>
@@ -425,6 +464,59 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
             {browserViewTab === "text" && (
               <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-950/40 text-xs text-zinc-300 font-sans whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
                 {browserSession?.pageTextSnippet || "No page text loaded."}
+              </div>
+            )}
+
+            {/* View Tab 3: Tencent BrowserSkill Network & Console Telemetry */}
+            {browserViewTab === "telemetry" && (
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {/* Network requests */}
+                <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 mb-2">
+                    Network Traffic ({telemetry.networkLogs.length})
+                  </div>
+                  <div className="space-y-1 font-mono text-[10px]">
+                    {telemetry.networkLogs.length === 0 ? (
+                      <div className="text-zinc-500">No network requests captured yet.</div>
+                    ) : (
+                      telemetry.networkLogs.slice(0, 8).map((net: any) => (
+                        <div key={net.id} className="flex items-center justify-between p-1 rounded bg-zinc-900/40 text-zinc-300">
+                          <div className="flex items-center gap-1.5 truncate pr-2">
+                            <span className="font-bold text-sky-400">{net.method}</span>
+                            <span className={`px-1 rounded text-[9px] ${net.status === 200 ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"}`}>
+                              {net.status}
+                            </span>
+                            <span className="truncate">{net.url}</span>
+                          </div>
+                          <span className="text-zinc-500 shrink-0">{net.durationMs}ms</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Console logs */}
+                <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 mb-2">
+                    Console Logs ({telemetry.consoleLogs.length})
+                  </div>
+                  <div className="space-y-1 font-mono text-[10px]">
+                    {telemetry.consoleLogs.length === 0 ? (
+                      <div className="text-zinc-500">No console output.</div>
+                    ) : (
+                      telemetry.consoleLogs.slice(0, 8).map((c: any) => (
+                        <div key={c.id} className="p-1 rounded bg-zinc-900/40 text-zinc-300 flex items-start gap-1.5">
+                          <span className={`uppercase font-bold text-[9px] px-1 rounded shrink-0 ${
+                            c.level === "error" ? "bg-red-950 text-red-400" : c.level === "warn" ? "bg-amber-950 text-amber-400" : "bg-zinc-800 text-zinc-400"
+                          }`}>
+                            {c.level}
+                          </span>
+                          <span className="truncate">{c.message}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

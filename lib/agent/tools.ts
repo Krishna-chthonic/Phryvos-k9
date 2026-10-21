@@ -86,6 +86,7 @@ import {
 } from "./reach-service";
 import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
 import { aipexBridge } from "@/lib/browser/aipex-bridge";
+import { browserSkill } from "@/lib/browser/browserskill-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1336,6 +1337,55 @@ function toolAipexStatus(_ctx: VaultCtx) {
     return JSON.stringify(s);
   } catch (err) {
     return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+// ---------------------------------------------------------------- Tencent BrowserSkill Debugging Tools (Tencent/BrowserSkill)
+
+async function toolBskOpen(_ctx: VaultCtx, a: { url: string; sessionId?: string }) {
+  try {
+    const res = await browserSkill.bskOpen(a.sessionId || "default", a.url);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolBskConsole(_ctx: VaultCtx, a: { limit?: number; level?: "log" | "warn" | "error" | "info" }) {
+  try {
+    const logs = browserSkill.getConsoleLogs(a.limit || 20, a.level);
+    return JSON.stringify({ count: logs.length, logs });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolBskNetwork(_ctx: VaultCtx, a: { limit?: number; search?: string }) {
+  try {
+    const requests = browserSkill.getNetworkLogs(a.limit || 20, { search: a.search });
+    return JSON.stringify({ count: requests.length, requests });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolBskScreenshot(ctx: VaultCtx, a: { sessionId?: string; targetPath?: string }) {
+  try {
+    const res = await browserSkill.bskScreenshot(ctx, a.sessionId || "default", a.targetPath);
+    return JSON.stringify({ success: true, vaultPath: res.vaultPath, charCount: res.charCount, title: res.title });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolBskCli(ctx: VaultCtx, a: { command: string; sessionId?: string }) {
+  try {
+    const args = a.command.trim().split(/\s+/);
+    if (args[0] === "bsk") args.shift();
+    const output = await browserSkill.executeCli(ctx, args, a.sessionId || "default");
+    return output;
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -2604,6 +2654,102 @@ export function ensureAgentTools(): void {
     (c) => toolAipexStatus(c),
     false,
     z.object({}),
+  );
+
+  // ---------------------------------------------------------------- Tencent BrowserSkill Debugging Tools (Tencent/BrowserSkill)
+
+  reg(
+    "bsk_open",
+    "Open a web URL with BrowserSkill network traffic inspection and console logging.",
+    P(
+      "bsk_open",
+      "Open URL with telemetry",
+      { url: { type: "string", description: "Target URL to open" } },
+      { sessionId: { type: "string", description: "Browser session ID" } },
+    ),
+    (c, a) => toolBskOpen(c, a),
+    false,
+    z.object({
+      url: z.string(),
+      sessionId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "bsk_console",
+    "Inspect recent browser console logs (console.log, console.warn, console.error, JS exceptions) to troubleshoot broken or failing web applications.",
+    P(
+      "bsk_console",
+      "Get browser console logs",
+      {},
+      {
+        limit: { type: "number", description: "Max logs to retrieve (default: 20)" },
+        level: { type: "string", enum: ["log", "warn", "error", "info"], description: "Filter by log level" },
+      },
+    ),
+    (c, a) => toolBskConsole(c, a),
+    false,
+    z.object({
+      limit: z.number().optional(),
+      level: z.enum(["log", "warn", "error", "info"]).optional(),
+    }),
+  );
+
+  reg(
+    "bsk_network",
+    "Inspect outgoing browser network requests (XHR/Fetch), response status codes (200, 404, 500), and latency to diagnose failing web endpoints.",
+    P(
+      "bsk_network",
+      "Inspect browser network requests",
+      {},
+      {
+        limit: { type: "number", description: "Max requests to retrieve (default: 20)" },
+        search: { type: "string", description: "URL filter substring" },
+      },
+    ),
+    (c, a) => toolBskNetwork(c, a),
+    false,
+    z.object({
+      limit: z.number().optional(),
+      search: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "bsk_screenshot",
+    "Capture a full-page rendered DOM snapshot of the current browser viewport and persist it directly into the encrypted vault at /browser/screenshots/.",
+    P(
+      "bsk_screenshot",
+      "Capture browser screenshot to vault",
+      {},
+      {
+        sessionId: { type: "string", description: "Browser session ID" },
+        targetPath: { type: "string", description: "Custom vault path for markdown snapshot" },
+      },
+    ),
+    (c, a) => toolBskScreenshot(c, a),
+    false,
+    z.object({
+      sessionId: z.string().optional(),
+      targetPath: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "bsk_cli",
+    "Execute a shell-native 'bsk' CLI command (e.g. 'bsk open <url>', 'bsk console', 'bsk network', 'bsk screenshot').",
+    P(
+      "bsk_cli",
+      "Execute bsk shell command",
+      { command: { type: "string", description: "Full bsk command string" } },
+      { sessionId: { type: "string", description: "Browser session ID" } },
+    ),
+    (c, a) => toolBskCli(c, a),
+    false,
+    z.object({
+      command: z.string(),
+      sessionId: z.string().optional(),
+    }),
   );
 }
 

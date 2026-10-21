@@ -6,6 +6,7 @@ import {
   createOpenAiCompatibleClient,
   type ProviderConnection,
 } from "@/lib/ai/adapters/openai-compatible";
+import { wrapLlmClientWithScrubber } from "@/lib/ai/pii-scrubber";
 import type { LlmClient } from "@/lib/ai/types";
 
 export interface VaultCtx {
@@ -210,11 +211,12 @@ export function connectionFor(ctx: VaultCtx, id: number): ProviderConnection {
   };
 }
 
-export function createLlmClient(ctx: VaultCtx, providerId: number): LlmClient {
+export function createLlmClient(ctx: VaultCtx, providerId: number, options?: { skipScrubber?: boolean }): LlmClient {
   const conn = connectionFor(ctx, providerId);
-  return conn.kind === "anthropic"
+  const raw = conn.kind === "anthropic"
     ? createAnthropicClient(conn)
     : createOpenAiCompatibleClient(conn);
+  return options?.skipScrubber ? raw : wrapLlmClientWithScrubber(raw);
 }
 
 export { randomUUID as newChatId };

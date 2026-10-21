@@ -47,6 +47,7 @@ next-env.d.ts
 /backups/
 .phryvos.pid
 .phryvos.log
+.phryvos/worktrees/
 
 # internal planning & reports
 *MASTER_PLAN*.md

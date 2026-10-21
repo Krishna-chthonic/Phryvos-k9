@@ -61,6 +61,13 @@ import {
   toolRemoveSkill,
 } from "./custom-skills";
 import { getDb } from "@/lib/db/client";
+import { listDots, createDotTask } from "@/lib/dots-service";
+import {
+  ensureDotWorktree,
+  getDotWorktreeInfo,
+  mergeDotWorktree,
+  removeDotWorktree,
+} from "@/lib/dots/worktree-service";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -966,6 +973,62 @@ async function toolWebFetch(_ctx: VaultCtx, a: { url: string; maxChars?: number 
   return await performWebFetch(a.url, a.maxChars ?? 15_000);
 }
 
+// ---------------------------------------------------------------- company & worktree tools
+
+async function toolDelegateToDot(
+  ctx: VaultCtx,
+  a: { targetDot: string; taskPrompt: string; intervalSeconds?: number | null },
+): Promise<string> {
+  const dots = listDots(ctx);
+  const target = a.targetDot.toLowerCase().trim();
+  const matchedDot = dots.find(
+    (d) =>
+      d.name.toLowerCase() === target ||
+      d.role.toLowerCase().includes(target) ||
+      d.id.toLowerCase() === target,
+  );
+
+  if (!matchedDot) {
+    const available = dots.map((d) => `"${d.name}" (${d.role})`).join(", ");
+    return `Error: Coworker "${a.targetDot}" not found. Available company coworkers: ${available || "None configured"}`;
+  }
+
+  const task = createDotTask(ctx, matchedDot.id, {
+    prompt: a.taskPrompt,
+    intervalSeconds: a.intervalSeconds ?? null,
+  });
+
+  return `✔ Successfully delegated task to coworker ${matchedDot.name} (${matchedDot.role}):\nTask ID: ${task.id}\nPrompt: "${task.prompt}"\nSchedule: ${a.intervalSeconds ? `Every ${a.intervalSeconds}s` : "One-time immediate run"}\nStatus: Queued`;
+}
+
+async function toolManageWorktree(
+  _ctx: VaultCtx,
+  a: { action: "create" | "status" | "merge" | "remove"; dotName: string; targetBranch?: string },
+): Promise<string> {
+  const { action, dotName, targetBranch = "main" } = a;
+  switch (action) {
+    case "create": {
+      const res = await ensureDotWorktree(dotName, targetBranch);
+      return `✔ Worktree ready for ${dotName}:\nPath: ${res.worktreePath}\nBranch: ${res.branch}\nStatus: ${res.created ? "Newly initialized" : "Re-attached existing"}`;
+    }
+    case "status": {
+      const info = await getDotWorktreeInfo(dotName);
+      if (!info) return `No active worktree found for ${dotName}.`;
+      return `Worktree Status for ${dotName}:\nBranch: ${info.branch}\nCommit: ${info.headCommit}\nClean: ${info.isClean}\nUncommitted: ${info.uncommittedFiles.length ? info.uncommittedFiles.join(", ") : "None"}`;
+    }
+    case "merge": {
+      const res = await mergeDotWorktree(dotName, targetBranch);
+      return res.success ? `✔ ${res.message}` : `❌ ${res.message}`;
+    }
+    case "remove": {
+      const res = await removeDotWorktree(dotName, true);
+      return res.success ? `✔ ${res.message}` : `❌ ${res.message}`;
+    }
+    default:
+      return `Unknown worktree action: ${action}`;
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -1772,6 +1835,54 @@ export function ensureAgentTools(): void {
     (c, a) => toolRemoveSkill(a, c),
     false,
     z.object({ name: z.string() }),
+  );
+
+  // ---------------------------------------------------------------- Virtual Company / Swarm tools (Paperclip & Orca)
+
+  reg(
+    "delegate_to_dot",
+    "Assign a background subtask to another specialist coworker/Dot in your company (e.g. 'atlas' for coding, 'nova' for deep research, 'cypher' for security verification). The coworker executes the task autonomously and records the result.",
+    P(
+      "delegate_to_dot",
+      "Delegate subtask to company coworker Dot",
+      {
+        targetDot: { type: "string", description: "Name or role of coworker Dot (e.g. 'atlas', 'nova', 'cypher')" },
+        taskPrompt: { type: "string", description: "Clear instructions of what the coworker should accomplish" },
+      },
+      {
+        intervalSeconds: { type: "number", description: "Optional repeat interval in seconds. Omit or null for one-time run." },
+      },
+    ),
+    (c, a) => toolDelegateToDot(c, a),
+    false,
+    z.object({
+      targetDot: z.string(),
+      taskPrompt: z.string(),
+      intervalSeconds: z.number().nullable().optional(),
+    }),
+  );
+
+  reg(
+    "manage_worktree",
+    "Manage isolated git worktrees for parallel coding without branch conflicts. Actions: 'create' (sets up worktree and branch), 'status' (checks uncommitted changes), 'merge' (merges dot branch to main), 'remove' (cleans up worktree).",
+    P(
+      "manage_worktree",
+      "Manage Dot git worktree",
+      {
+        action: { type: "string", description: "Action to perform: 'create' | 'status' | 'merge' | 'remove'" },
+        dotName: { type: "string", description: "Name of the coworker Dot" },
+      },
+      {
+        targetBranch: { type: "string", description: "Target branch for merge (default: 'main')" },
+      },
+    ),
+    (c, a) => toolManageWorktree(c, a),
+    false,
+    z.object({
+      action: z.enum(["create", "status", "merge", "remove"]),
+      dotName: z.string(),
+      targetBranch: z.string().optional(),
+    }),
   );
 }
 

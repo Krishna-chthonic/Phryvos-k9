@@ -14,6 +14,8 @@ import {
   Zap,
   Sparkles,
   Calendar,
+  Kanban,
+  List,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import type { DotDto, DotTaskDto } from "@/lib/dots-service";
@@ -36,6 +38,7 @@ const INTERVAL_PRESETS = [
 export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
   const [tasks, setTasks] = useState<DotTaskDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [intervalSeconds, setIntervalSeconds] = useState<number | null>(3600);
@@ -163,36 +166,68 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
           <Clock className="h-4 w-4 text-emerald-500" />
           <div>
             <h2 className="text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Autonomous Standing Tasks
+              Company Task Board
             </h2>
             <p className="text-[10px] text-zinc-500">
-              Always-on background tasks executed automatically by {dot.name}
+              Autonomous background tasks executed by {dot.name}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={() => setDialogOpen(true)}
-          className="flex h-8 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500 transition cursor-pointer"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>New Scheduled Task</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 p-0.5 rounded-xl border border-zinc-200/70 dark:border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                viewMode === "kanban"
+                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+              title="Kanban Board view"
+            >
+              <Kanban className="h-3 w-3" />
+              <span className="hidden sm:inline">Kanban</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                viewMode === "list"
+                  ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
+              }`}
+              title="List view"
+            >
+              <List className="h-3 w-3" />
+              <span className="hidden sm:inline">List</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setDialogOpen(true)}
+            className="flex h-8 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white shadow-xs hover:bg-zinc-800 active:scale-95 dark:bg-emerald-600 dark:hover:bg-emerald-500 transition cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden xs:inline">New Task</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
-        {loading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-72 text-center p-6 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
+      {loading ? (
+        <div className="flex h-48 items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="flex flex-col items-center justify-center max-w-sm p-8 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
             <DotMascot character={dot.character} size="medium" state="idle" />
             <h3 className="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
               No autonomous tasks scheduled for {dot.name}
             </h3>
-            <p className="mt-1 text-xs text-zinc-500 max-w-sm leading-relaxed">
+            <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
               Assign recurring tasks to let {dot.name} work proactively in the background without needing your manual commands.
             </p>
             <button
@@ -203,8 +238,144 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
               <span>Schedule First Task</span>
             </button>
           </div>
-        ) : (
-          tasks.map((task) => {
+        </div>
+      ) : viewMode === "kanban" ? (
+        /* KANBAN BOARD VIEW */
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-w-[720px] lg:min-w-0">
+            {[
+              {
+                id: "queued",
+                title: "Backlog / Queued",
+                icon: Clock,
+                color: "text-sky-500",
+                badge: "bg-sky-500/10 text-sky-500 border-sky-500/20",
+                list: tasks.filter((t) => t.status === "queued"),
+              },
+              {
+                id: "running",
+                title: "In Progress",
+                icon: Loader2,
+                color: "text-amber-500",
+                badge: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+                list: tasks.filter((t) => t.status === "running"),
+              },
+              {
+                id: "completed",
+                title: "Completed",
+                icon: CheckCircle2,
+                color: "text-emerald-500",
+                badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+                list: tasks.filter((t) => t.status === "completed"),
+              },
+              {
+                id: "paused",
+                title: "Paused / Blocked",
+                icon: Pause,
+                color: "text-zinc-400",
+                badge: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+                list: tasks.filter((t) => t.status === "paused" || t.status === "failed"),
+              },
+            ].map((col) => {
+              const ColIcon = col.icon;
+              return (
+                <div
+                  key={col.id}
+                  className="flex flex-col h-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/40 p-3 min-h-[300px]"
+                >
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-1.5">
+                      <ColIcon className={`h-3.5 w-3.5 ${col.color} ${col.id === "running" ? "animate-spin" : ""}`} />
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{col.title}</span>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border ${col.badge}`}>
+                      {col.list.length}
+                    </span>
+                  </div>
+
+                  {/* Column Card List */}
+                  <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                    {col.list.length === 0 ? (
+                      <div className="flex items-center justify-center h-24 text-[11px] text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800/60 rounded-xl">
+                        No tasks
+                      </div>
+                    ) : (
+                      col.list.map((task) => {
+                        const isBusy = actionInProgress === task.id;
+                        const isRunning = task.status === "running";
+                        const isPaused = task.status === "paused";
+
+                        return (
+                          <div
+                            key={task.id}
+                            className="group flex flex-col gap-2 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs hover:border-zinc-300 dark:hover:border-zinc-700 transition"
+                          >
+                            <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100 line-clamp-3 leading-snug">
+                              {task.prompt}
+                            </p>
+
+                            <div className="flex items-center gap-1 text-[10px] text-zinc-500 flex-wrap">
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                {formatInterval(task.intervalSeconds)}
+                              </span>
+                              {task.nextRunAt && !isPaused && (
+                                <span>• {formatRelativeNext(task.nextRunAt)}</span>
+                              )}
+                            </div>
+
+                            {task.lastResult && (
+                              <p className="text-[10px] text-zinc-500 font-mono bg-zinc-50 dark:bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-200/50 dark:border-zinc-800/50 line-clamp-2">
+                                {task.lastResult}
+                              </p>
+                            )}
+
+                            {/* Card Footer Actions */}
+                            <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
+                              <span className="text-[9px] font-mono text-zinc-400">
+                                #{task.id.replace("task_", "")}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleRunNow(task)}
+                                  disabled={isBusy || isRunning}
+                                  className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 disabled:opacity-40 transition cursor-pointer"
+                                  title="Run now"
+                                >
+                                  <Zap className="h-3 w-3 text-amber-500" />
+                                </button>
+                                <button
+                                  onClick={() => handleTogglePause(task)}
+                                  disabled={isBusy}
+                                  className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition cursor-pointer"
+                                  title={isPaused ? "Resume" : "Pause"}
+                                >
+                                  {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTask(task.id)}
+                                  disabled={isBusy}
+                                  className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition cursor-pointer"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* VERTICAL LIST VIEW */
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+          {tasks.map((task) => {
             const isBusy = actionInProgress === task.id;
             const isRunning = task.status === "running";
             const isPaused = task.status === "paused";
@@ -309,9 +480,9 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* New Scheduled Task Dialog Modal */}
       {dialogOpen && (

@@ -64,12 +64,15 @@ export interface LoopDeps {
   autoApproveTools?: boolean;
   /** Provider turn parameters (reasoning_effort, thinkingBudget, temperature, etc.) */
   turnOptions?: TurnOptions;
+  /** Hard token budget cap to prevent runaway token spend (default: 80,000) */
+  maxTokensBudget?: number;
 }
 
 export interface AgentResult {
   text: string;
   finish: "stop" | "tool_calls" | "length" | "error" | "capped";
   toolSteps: number;
+  tokensUsed?: number;
 }
 
 function summarizeToolArgs(tool: string, args: Record<string, unknown>): string {
@@ -118,6 +121,8 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
   const allExecutedTools: ToolCall[] = [];
   let toolSteps = 0;
   let capped = false;
+  let totalTokensUsed = 0;
+  const tokenBudget = deps.maxTokensBudget ?? 80_000;
 
   const emitThoughtDelta = (chunk: string) => {
     if (!inThoughtBlock) {
@@ -161,6 +166,18 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
       providerTimeout,
       "provider",
     );
+
+    const stepTokens = (turn.usage?.promptTokens ?? 0) + (turn.usage?.completionTokens ?? 0);
+    totalTokensUsed += stepTokens;
+    if (totalTokensUsed >= tokenBudget) {
+      capped = true;
+      emitThoughtDelta(`\n> ⚠️ Token budget cap reached (${totalTokensUsed.toLocaleString()} tokens). Pausing turn to protect API budget.\n`);
+      if (turn.toolCalls.length === 0) {
+        closeThoughtBlock();
+        deps.appendAssistant(turn.text || "(Budget cap reached)", allExecutedTools);
+        return { text: turn.text, finish: "capped", toolSteps, tokensUsed: totalTokensUsed };
+      }
+    }
 
     // If turn called tools, whatever text was output is pre-tool deliberation
     if (turn.toolCalls.length > 0) {
@@ -300,5 +317,5 @@ MANDATORY NEXT STEPS:
   closeThoughtBlock();
   const finalText = (accumulatedThought ? accumulatedThought : "") + "(stopped)";
   deps.appendAssistant(finalText, allExecutedTools);
-  return { text: finalText, finish: capped ? "capped" : "stop", toolSteps };
+  return { text: finalText, finish: capped ? "capped" : "stop", toolSteps, tokensUsed: totalTokensUsed };
 }

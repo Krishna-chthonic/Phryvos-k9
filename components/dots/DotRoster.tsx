@@ -60,7 +60,7 @@ export function DotRoster({
           <div className="flex items-center gap-1">
             <button
               onClick={onOpenNewDotDialog}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100 dark:border-zinc-750 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 cursor-pointer"
               title="Spawn New Dot"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -141,7 +141,7 @@ export function DotRoster({
         <div className="border-t border-zinc-200/80 p-2.5 space-y-1 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-900/50">
           <Link
             href="/chat"
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-850 transition"
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition"
           >
             <MessageSquare className="h-4 w-4 text-zinc-500" />
             <div className="flex-1 min-w-0 truncate">Back to Chat</div>
@@ -154,7 +154,7 @@ export function DotRoster({
               onCloseMobile();
               window.dispatchEvent(new CustomEvent("phryvos:open-menu"));
             }}
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-850 transition md:hidden"
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition md:hidden"
           >
             <Menu className="h-4 w-4 text-zinc-500" />
             <div className="flex-1 min-w-0 truncate text-left">Main App Navigation</div>

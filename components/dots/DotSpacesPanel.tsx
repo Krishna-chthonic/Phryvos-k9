@@ -133,7 +133,7 @@ export function DotSpacesPanel({
                 className={`group flex items-center justify-between rounded-xl px-3 py-2 text-xs transition cursor-pointer ${
                   s.id === selectedSpaceId
                     ? "bg-zinc-200 font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-850 dark:hover:text-zinc-200"
+                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                 }`}
               >
                 <div className="flex items-center gap-2 truncate min-w-0">
@@ -161,7 +161,7 @@ export function DotSpacesPanel({
         {selectedSpaceId ? (
           <>
             {/* Action Bar */}
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-850 px-4 py-2.5 bg-zinc-50/50 dark:bg-zinc-900/30">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-2.5 bg-zinc-50/50 dark:bg-zinc-900/30">
               <input
                 type="text"
                 value={title}
@@ -182,7 +182,7 @@ export function DotSpacesPanel({
                 <button
                   onClick={handleSavePage}
                   disabled={saving}
-                  className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 dark:bg-zinc-800 dark:border dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-750 transition cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 dark:bg-zinc-800 dark:border dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-700 transition cursor-pointer"
                 >
                   {saved ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : null}
                   <span>{saving ? "Saving…" : saved ? "Saved" : "Save"}</span>
@@ -211,7 +211,7 @@ export function DotSpacesPanel({
             </p>
             <button
               onClick={handleCreateNewPage}
-              className="mt-4 flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white dark:bg-zinc-800 dark:border dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-750 transition cursor-pointer"
+              className="mt-4 flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white dark:bg-zinc-800 dark:border dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-700 transition cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Create New Page</span>

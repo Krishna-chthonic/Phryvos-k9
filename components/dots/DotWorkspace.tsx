@@ -18,6 +18,7 @@ import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
 import { DotSpacesPanel } from "./DotSpacesPanel";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
+import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
 import type { ProviderMeta } from "@/lib/chat-client";
 
@@ -306,13 +307,17 @@ export function DotWorkspace({
                         <DotMascot character={dot.character} size="small" className="mt-1 w-7 h-7" />
                       )}
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                        className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                           isUser
-                            ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:border dark:border-zinc-700/80 dark:text-zinc-100 shadow-2xs"
-                            : "bg-zinc-100 text-zinc-900 dark:bg-zinc-850 dark:border dark:border-zinc-800 dark:text-zinc-100"
+                            ? "bg-zinc-900 text-white border border-zinc-900 dark:bg-zinc-800 dark:border-zinc-700/80 dark:text-zinc-100 shadow-2xs"
+                            : "bg-zinc-100 text-zinc-900 border border-zinc-200/80 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100 shadow-2xs"
                         }`}
                       >
-                        <MarkdownRenderer>{m.content}</MarkdownRenderer>
+                        {isUser ? (
+                          <MarkdownRenderer>{m.content}</MarkdownRenderer>
+                        ) : (
+                          <AssistantBody body={m.content} />
+                        )}
                       </div>
                     </div>
                   );
@@ -323,8 +328,8 @@ export function DotWorkspace({
               {streaming && streamText && (
                 <div className="flex gap-3 justify-start">
                   <DotMascot character={dot.character} size="small" state="working" className="mt-1 w-7 h-7" />
-                  <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-zinc-100 text-zinc-900 dark:bg-zinc-850 dark:border dark:border-zinc-800 dark:text-zinc-100">
-                    <MarkdownRenderer>{streamText}</MarkdownRenderer>
+                  <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-zinc-100 text-zinc-900 border border-zinc-200/80 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-100 shadow-2xs">
+                    <AssistantBody body={streamText} streaming={true} />
                   </div>
                 </div>
               )}

@@ -196,6 +196,19 @@ export function DotsApp() {
                 },
               ]);
             }
+          } else if (event === "error") {
+            const errData = data as { message?: string };
+            const errMsg = errData.message || "An error occurred during response generation";
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `err_${Date.now()}`,
+                dotId: activeDot.id,
+                role: "assistant",
+                content: `⚠️ **Error:** ${errMsg}`,
+                createdAt: Date.now(),
+              },
+            ]);
           }
         }
       }
@@ -205,6 +218,16 @@ export function DotsApp() {
       await loadDots();
     } catch (e) {
       console.error("Chat error", e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          dotId: activeDot.id,
+          role: "assistant",
+          content: `⚠️ **Error:** ${e instanceof Error ? e.message : "Failed to communicate with Dot"}`,
+          createdAt: Date.now(),
+        },
+      ]);
     } finally {
       setStreaming(false);
       setStreamText("");

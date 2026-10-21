@@ -64,7 +64,9 @@ export async function POST(
     }
 
     const client = createLlmClient(ctx, provider.id);
-    const selectedModel = parsed.model || (dot.model !== "auto" ? dot.model : (provider.models[0] || "default"));
+    const selectedModel = (parsed.model && parsed.model !== "auto")
+      ? parsed.model
+      : (dot.model && dot.model !== "auto" ? dot.model : (provider.models[0] || "default"));
 
     // Stream SSE response
     const stream = new TransformStream();

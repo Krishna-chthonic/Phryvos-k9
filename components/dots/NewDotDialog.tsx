@@ -224,7 +224,7 @@ export function NewDotDialog({ open, onClose, onCreated }: NewDotDialogProps) {
                     className={`flex w-full items-center justify-between p-2.5 rounded-xl border text-left transition ${
                       isChecked
                         ? "border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/80"
-                        : "border-zinc-200 hover:bg-zinc-50/60 dark:border-zinc-800 dark:hover:bg-zinc-850"
+                        : "border-zinc-200 hover:bg-zinc-50/60 dark:border-zinc-800 dark:hover:bg-zinc-800"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">

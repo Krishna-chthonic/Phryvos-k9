@@ -142,23 +142,23 @@ export function DotWorkspace({
                 <span className="truncate text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   {dot.name}
                 </span>
-                <span className="hidden xs:inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 capitalize">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 capitalize">
                   {dot.status}
                 </span>
               </div>
-              <p className="truncate text-[10px] text-zinc-400 hidden lg:block">{dot.role}</p>
+              <p className="truncate text-[10px] text-zinc-400 hidden sm:block">{dot.role}</p>
             </div>
           </div>
         </div>
 
-        {/* Center / Right: Provider/Model Selectors & Tabs & Call */}
-        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
-          {/* Provider selector if multiple */}
+        {/* Right: Provider/Model Selectors & Call */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {/* Provider selector */}
           {providers.length > 1 && (
             <select
               value={String(providerId)}
               onChange={(e) => onSelectProvider(e.target.value === "" ? "" : Number(e.target.value))}
-              className="h-8 max-w-[85px] sm:max-w-[110px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+              className="h-8 max-w-[90px] sm:max-w-[120px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer"
               title="AI Provider"
             >
               <option value="">Provider</option>
@@ -175,7 +175,7 @@ export function DotWorkspace({
             <select
               value={selectedModel || (dot.model !== "auto" ? dot.model : modelOptions[0])}
               onChange={(e) => onSelectModel(e.target.value)}
-              className="h-8 max-w-[95px] xs:max-w-[125px] sm:max-w-[160px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+              className="h-8 max-w-[110px] sm:max-w-[170px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer"
               title="AI Model"
             >
               {modelOptions.map((m) => (
@@ -186,75 +186,85 @@ export function DotWorkspace({
             </select>
           )}
 
-          {/* Workspace Views */}
-          <div className="flex items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">
-            <button
-              onClick={() => setActiveTab("chat")}
-              className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                activeTab === "chat"
-                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("tasks")}
-              className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                activeTab === "tasks"
-                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5 text-emerald-500" />
-              <span className="hidden md:inline">Tasks</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("computer")}
-              className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                activeTab === "computer"
-                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              <Monitor className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Computer</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("spaces")}
-              className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
-                activeTab === "spaces"
-                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Spaces</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition cursor-pointer ${
-                activeTab === "settings"
-                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-              title="Dot Settings"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
           {/* Voice Call Button */}
           <button
             onClick={onOpenCall}
-            className="flex h-8 items-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-50 px-2 sm:px-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 transition shadow-2xs active:scale-95 cursor-pointer shrink-0"
+            className="flex h-8 items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-50 px-2 sm:px-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300 transition shadow-2xs active:scale-95 cursor-pointer shrink-0"
             title={`Voice call with ${dot.name}`}
           >
             <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden lg:inline">Call</span>
+            <span className="hidden sm:inline">Call</span>
           </button>
         </div>
+      </div>
+
+      {/* Prominent Dedicated Workspace Navigation Tabs */}
+      <div className="flex shrink-0 items-center border-b border-zinc-200/80 bg-zinc-50/80 px-2 sm:px-4 dark:border-zinc-800 dark:bg-zinc-900/60 overflow-x-auto no-scrollbar gap-1 sm:gap-2 py-1.5">
+        <button
+          onClick={() => setActiveTab("chat")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition shrink-0 cursor-pointer ${
+            activeTab === "chat"
+              ? "bg-white text-zinc-900 shadow-xs border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/60 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50"
+          }`}
+        >
+          <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
+          <span>Chat</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("tasks")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition shrink-0 cursor-pointer ${
+            activeTab === "tasks"
+              ? "bg-white text-zinc-900 shadow-xs border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/60 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50"
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5 text-amber-500" />
+          <span>Tasks</span>
+          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" title="Background Autonomous Runner Active" />
+        </button>
+
+        <button
+          onClick={() => setActiveTab("computer")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition shrink-0 cursor-pointer ${
+            activeTab === "computer"
+              ? "bg-white text-zinc-900 shadow-xs border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/60 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50"
+          }`}
+        >
+          <Monitor className="h-3.5 w-3.5 text-blue-500" />
+          <span>Computer</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("spaces")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition shrink-0 cursor-pointer ${
+            activeTab === "spaces"
+              ? "bg-white text-zinc-900 shadow-xs border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/60 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50"
+          }`}
+        >
+          <BookOpen className="h-3.5 w-3.5 text-purple-500" />
+          <span>Spaces</span>
+          {spaces.length > 0 && (
+            <span className="rounded-full bg-zinc-200 px-1.5 py-0.2 text-[10px] font-bold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
+              {spaces.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("settings")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition shrink-0 cursor-pointer ${
+            activeTab === "settings"
+              ? "bg-white text-zinc-900 shadow-xs border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/60 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50"
+          }`}
+        >
+          <Settings2 className="h-3.5 w-3.5 text-zinc-500" />
+          <span>Settings</span>
+        </button>
       </div>
 
       {/* Main Workspace Body */}

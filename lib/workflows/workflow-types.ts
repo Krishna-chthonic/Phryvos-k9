@@ -53,7 +53,7 @@ export interface WorkflowNode {
   name: string;
   position: { x: number; y: number };
   config: Record<string, any>;
-  status?: "idle" | "running" | "completed" | "failed";
+  status?: "idle" | "running" | "completed" | "failed" | "paused";
   lastOutput?: any;
   durationMs?: number;
   error?: string;

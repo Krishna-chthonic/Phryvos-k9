@@ -7,8 +7,19 @@
  * User instruction verbatim: "5. aur ai ke paas kuch skills plugins bhi hone chahiye jo ki important hai like web search, web fetch, etc."
  */
 
+import dns from "node:dns/promises";
+
 function isPrivateOrLocalHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().trim();
+  let host = hostname.toLowerCase().trim();
+  // Strip IPv6 brackets if present
+  if (host.startsWith("[") && host.endsWith("]")) {
+    host = host.slice(1, -1);
+  }
+  // Strip IPv4-mapped IPv6 prefix (::ffff:127.0.0.1)
+  if (host.startsWith("::ffff:")) {
+    host = host.slice(7);
+  }
+
   if (
     host === "localhost" ||
     host.endsWith(".localhost") ||
@@ -17,7 +28,7 @@ function isPrivateOrLocalHost(hostname: string): boolean {
     host === "0.0.0.0" ||
     host === "127.0.0.1" ||
     host === "::1" ||
-    host === "[::1]"
+    host === "0:0:0:0:0:0:0:1"
   ) {
     return true;
   }
@@ -36,19 +47,31 @@ function isPrivateOrLocalHost(hostname: string): boolean {
     if (o1 === 100 && o2 >= 64 && o2 <= 127) return true; // 100.64.0.0/10 Carrier-grade NAT
   }
 
-  // IPv6 checks
-  if (host.startsWith("[") && host.endsWith("]")) {
-    const rawIpv6 = host.slice(1, -1).toLowerCase();
-    if (
-      rawIpv6 === "::1" ||
-      rawIpv6.startsWith("fe80:") ||
-      rawIpv6.startsWith("fc00:") ||
-      rawIpv6.startsWith("fd00:")
-    ) {
-      return true;
-    }
+  // IPv6 private / link-local checks
+  if (
+    host === "::1" ||
+    host.startsWith("fe80:") ||
+    host.startsWith("fc00:") ||
+    host.startsWith("fd00:")
+  ) {
+    return true;
   }
 
+  return false;
+}
+
+async function isResolvedTargetPrivate(hostname: string): Promise<boolean> {
+  if (isPrivateOrLocalHost(hostname)) return true;
+  try {
+    const records = await dns.lookup(hostname, { all: true });
+    for (const rec of records) {
+      if (isPrivateOrLocalHost(rec.address)) {
+        return true;
+      }
+    }
+  } catch {
+    // DNS resolution failure will be handled by fetch
+  }
   return false;
 }
 
@@ -65,7 +88,7 @@ export async function performWebFetch(targetUrl: string, maxChars = 15_000): Pro
       return "Security Error: Only http and https protocols are permitted.";
     }
 
-    if (isPrivateOrLocalHost(parsed.hostname)) {
+    if (await isResolvedTargetPrivate(parsed.hostname)) {
       return `Security Error: SSRF Protection blocked access to private/internal network target (${parsed.hostname}).`;
     }
 
@@ -75,7 +98,7 @@ export async function performWebFetch(targetUrl: string, maxChars = 15_000): Pro
 
     while (hops < 5) {
       const u = new URL(currentUrl);
-      if (isPrivateOrLocalHost(u.hostname)) {
+      if (await isResolvedTargetPrivate(u.hostname)) {
         return `Security Error: SSRF Protection blocked redirect to private/internal host (${u.hostname}).`;
       }
 

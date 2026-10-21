@@ -40,6 +40,76 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
   const [browserViewTab, setBrowserViewTab] = useState<"dom" | "text" | "telemetry">("dom");
   const [telemetry, setTelemetry] = useState<{ consoleLogs: any[]; networkLogs: any[] }>({ consoleLogs: [], networkLogs: [] });
 
+  // Live Filesystem & Activity State
+  const [realFiles, setRealFiles] = useState<Array<{ name: string; isDir: boolean; size?: string }>>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [recentActivities, setRecentActivities] = useState<Array<{ id: string; action: string; time: string; detail: string }>>([]);
+
+  const loadRealFiles = React.useCallback(async () => {
+    setLoadingFiles(true);
+    try {
+      const res = await fetch(`/api/dots/${dot.id}/terminal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "ls -la", cwd: dot.workingDirectory }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.stdout) {
+          const lines = data.stdout.split("\n");
+          const items = lines
+            .map((l: string) => {
+              const parts = l.trim().split(/\s+/);
+              if (parts.length < 9) return null;
+              const perms = parts[0];
+              const size = parts[4];
+              const name = parts.slice(8).join(" ");
+              if (!name || name === "." || name === "..") return null;
+              return {
+                name,
+                isDir: perms.startsWith("d"),
+                size: perms.startsWith("d") ? "Directory" : `${size} B`,
+              };
+            })
+            .filter((x: any): x is { name: string; isDir: boolean; size: string } => Boolean(x));
+          setRealFiles(items);
+        }
+      }
+    } catch {} finally {
+      setLoadingFiles(false);
+    }
+  }, [dot.id, dot.workingDirectory]);
+
+  const loadActivities = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/dots/${dot.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messages) {
+          const toolMsgs = data.messages
+            .filter((m: any) => m.role === "tool" || m.toolName)
+            .slice(-12)
+            .reverse()
+            .map((m: any) => ({
+              id: m.id,
+              action: m.toolName ? `Executed: ${m.toolName}` : "Shell command",
+              time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              detail: m.content.slice(0, 120),
+            }));
+          setRecentActivities(toolMsgs);
+        }
+      }
+    } catch {}
+  }, [dot.id]);
+
+  React.useEffect(() => {
+    if (tab === "Files") {
+      void loadRealFiles();
+    } else if (tab === "Activity") {
+      void loadActivities();
+    }
+  }, [tab, loadRealFiles, loadActivities]);
+
   const loadBrowserSession = React.useCallback(async () => {
     try {
       const [resSession, resTelemetry] = await Promise.all([
@@ -305,28 +375,54 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
                 <Folder className="h-4 w-4 text-amber-400" />
                 <span className="font-semibold text-zinc-200">Workspace Files</span>
               </div>
-              <span className="text-[11px] font-mono text-zinc-500">{dot.workingDirectory}</span>
-            </div>
-            <div className="space-y-2 font-mono text-zinc-400 text-xs">
-              <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/70 cursor-pointer">
-                <span className="flex items-center gap-2 text-zinc-200">
-                  <Folder className="h-3.5 w-3.5 text-sky-400" /> src/
-                </span>
-                <span className="text-[10px] text-zinc-500">Directory</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/70 cursor-pointer">
-                <span className="flex items-center gap-2 text-zinc-200">
-                  <Folder className="h-3.5 w-3.5 text-sky-400" /> docs/
-                </span>
-                <span className="text-[10px] text-zinc-500">Directory</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/70 cursor-pointer">
-                <span className="flex items-center gap-2 text-zinc-200">
-                  <Code2 className="h-3.5 w-3.5 text-emerald-400" /> package.json
-                </span>
-                <span className="text-[10px] text-zinc-500">File</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-500">{dot.workingDirectory}</span>
+                <button
+                  onClick={() => void loadRealFiles()}
+                  disabled={loadingFiles}
+                  className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                  title="Refresh filesystem"
+                >
+                  <RotateCcw className={`h-3 w-3 ${loadingFiles ? "animate-spin" : ""}`} />
+                </button>
               </div>
             </div>
+
+            {loadingFiles ? (
+              <div className="py-8 flex items-center justify-center text-zinc-500 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+                <span>Reading directory tree...</span>
+              </div>
+            ) : realFiles.length === 0 ? (
+              <div className="py-8 text-center text-zinc-500">
+                Directory is empty or not yet initialized. Use the terminal tab to run commands.
+              </div>
+            ) : (
+              <div className="space-y-1.5 font-mono text-zinc-400 text-xs max-h-[340px] overflow-y-auto">
+                {realFiles.map((f) => (
+                  <div
+                    key={f.name}
+                    onClick={() => {
+                      if (!f.isDir) {
+                        setTab("Terminal");
+                        handleRunCommand(`cat "${f.name}"`);
+                      }
+                    }}
+                    className="flex items-center justify-between p-2 rounded-xl bg-zinc-800/40 hover:bg-zinc-800/80 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2 text-zinc-200 truncate">
+                      {f.isDir ? (
+                        <Folder className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                      ) : (
+                        <Code2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      )}
+                      <span className="truncate">{f.name}</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 shrink-0">{f.size}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -524,16 +620,45 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
 
         {tab === "Activity" && (
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-3 text-xs">
-            <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-              <Clock className="h-4 w-4 text-emerald-400" />
-              <span className="font-semibold text-zinc-200">Activity Timeline</span>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-400" />
+                <span className="font-semibold text-zinc-200">Execution Activity Timeline</span>
+              </div>
+              <button
+                onClick={() => void loadActivities()}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                title="Refresh activity"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
             </div>
-            <div className="space-y-2 text-zinc-400">
-              <div className="flex items-start gap-2.5 p-2 rounded-xl bg-zinc-800/30">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+
+            <div className="space-y-2 text-zinc-400 max-h-[340px] overflow-y-auto">
+              {recentActivities.length === 0 ? (
+                <div className="py-6 text-center text-zinc-500">
+                  No tool execution events recorded yet. Assign a task or send a command to see live telemetry.
+                </div>
+              ) : (
+                recentActivities.map((act) => (
+                  <div key={act.id} className="flex items-start gap-2.5 p-2 rounded-xl bg-zinc-800/40">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-zinc-200 font-semibold truncate">{act.action}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono shrink-0">{act.time}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 font-mono mt-0.5 truncate">{act.detail}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <div className="flex items-start gap-2.5 p-2 rounded-xl bg-zinc-800/20 border border-zinc-800/50">
+                <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="text-zinc-200 font-medium">{dot.name} initialized</div>
-                  <div className="text-[10px] text-zinc-500">Virtual environment provisioned at {dot.workingDirectory}</div>
+                  <div className="text-zinc-300 font-medium">{dot.name} environment provisioned</div>
+                  <div className="text-[10px] text-zinc-500 font-mono">{dot.workingDirectory}</div>
                 </div>
               </div>
             </div>

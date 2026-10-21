@@ -67,6 +67,8 @@ export interface LoopDeps {
   turnOptions?: TurnOptions;
   /** Hard token budget cap to prevent runaway token spend (default: 80,000) */
   maxTokensBudget?: number;
+  /** Server-side allowed tool names to restrict tool execution to agent's assigned permissions */
+  allowedTools?: string[];
 }
 
 export interface AgentResult {
@@ -114,7 +116,7 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
   const { client, model, signal } = deps;
   const maxSteps = deps.maxSteps ?? MAX_AGENT_STEPS;
   const providerTimeout = deps.providerTimeoutMs ?? PROVIDER_TIMEOUT_MS;
-  const specs = toolSpecs();
+  const specs = toolSpecs(deps.allowedTools);
   const initialTransformed = await dshChassis.runBeforeTurnHooks(ctx, deps.initialMessages, {
     mode: deps.mode,
     effort: deps.effort,
@@ -270,16 +272,27 @@ MANDATORY NEXT STEPS:
       let approval: ApprovalOutcome | undefined;
       let blocked = false;
 
-      // DeepSeek Harness onToolCall hook
-      const hookDecision = await dshChassis.runToolCallHooks(ctx, tc.name, tc.args);
-      if (!hookDecision.allow) {
+      // Server-side allowed tools check for scoped agent permissions
+      if (deps.allowedTools && deps.allowedTools.length > 0 && !deps.allowedTools.includes(tc.name)) {
         blocked = true;
         approval = {
           decision: "denied",
-          detail: `Blocked by policy: ${hookDecision.reason || "Safety check"}`,
+          detail: `DENIED: Tool "${tc.name}" is disabled for this agent. Allowed tools: ${deps.allowedTools.join(", ")}`,
         };
-      } else if (hookDecision.modifiedArgs) {
-        tc.args = hookDecision.modifiedArgs;
+      }
+
+      // DeepSeek Harness onToolCall hook
+      if (!blocked) {
+        const hookDecision = await dshChassis.runToolCallHooks(ctx, tc.name, tc.args);
+        if (!hookDecision.allow) {
+          blocked = true;
+          approval = {
+            decision: "denied",
+            detail: `Blocked by policy: ${hookDecision.reason || "Safety check"}`,
+          };
+        } else if (hookDecision.modifiedArgs) {
+          tc.args = hookDecision.modifiedArgs;
+        }
       }
 
       if (!blocked && isDestructive(tc.name)) {
@@ -310,7 +323,7 @@ MANDATORY NEXT STEPS:
       } else {
         try {
           result = await withTimeout(
-            Promise.resolve(runTool(tc.name, tc.args, ctx)),
+            Promise.resolve(runTool(tc.name, tc.args, ctx, deps.allowedTools)),
             TOOL_TIMEOUT_MS,
             `tool ${tc.name}`,
           );

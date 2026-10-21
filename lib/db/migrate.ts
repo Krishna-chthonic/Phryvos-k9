@@ -70,6 +70,21 @@ export function runMigrations(db: Database.Database): void {
       deleted_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_memory_tombstones_hash ON memory_tombstones(content_hash);
+    CREATE TABLE IF NOT EXISTS memory_consolidation (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      stm_key TEXT UNIQUE NOT NULL,
+      stm_value TEXT NOT NULL,
+      stm_access_count INTEGER NOT NULL DEFAULT 0,
+      stm_last_access INTEGER NOT NULL,
+      ltm_promoted INTEGER NOT NULL DEFAULT 0,
+      ltm_point TEXT,
+      ltm_category TEXT,
+      decay_score REAL NOT NULL DEFAULT 1.0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_memory_stm_access ON memory_consolidation(stm_last_access);
+    CREATE INDEX IF NOT EXISTS idx_memory_decay ON memory_consolidation(decay_score);
     CREATE TABLE IF NOT EXISTS dots (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

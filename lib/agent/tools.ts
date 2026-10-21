@@ -832,32 +832,262 @@ function toolDeleteMemory(ctx: VaultCtx, a: { id: number }) {
 
 // -------------------------------------------------------------- calculation
 
-function toolCalculate(_ctx: VaultCtx, a: { expression: string }) {
-  try {
-    const raw = a.expression.trim();
-    if (!raw) return "Expression cannot be empty.";
-    const expr = raw
-      .replace(/×/g, "*")
-      .replace(/÷/g, "/")
-      .replace(/\^/g, "**");
+/**
+ * Strict AST-based / recursive-descent math expression evaluator with zero eval/new Function.
+ * Completely isolates computation to arithmetic primitives and safe Math functions.
+ */
+function evaluateMathExpression(rawExpr: string): number {
+  const sanitized = rawExpr
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/\*\*/g, "^");
 
-    // Whitelist safe math characters and tokens
-    if (
-      !/^[0-9+\-*/().,%^ \t_eE]|Math\.[a-zA-Z0-9_]+|pi|PI|sqrt|sin|cos|tan|log|pow|abs|round|floor|ceil/.test(
-        expr,
-      )
-    ) {
-      return "Expression contains invalid mathematical characters.";
+  type TokenType = "NUMBER" | "IDENT" | "OP" | "LPAREN" | "RPAREN" | "COMMA";
+  interface Token {
+    type: TokenType;
+    value: string | number;
+  }
+
+  const tokens: Token[] = [];
+  let i = 0;
+  const len = sanitized.length;
+
+  while (i < len) {
+    const ch = sanitized[i];
+    if (/\s/.test(ch)) {
+      i++;
+      continue;
     }
 
-    const safeEval = new Function(
-      "Math",
-      `"use strict";
-       const { sqrt, sin, cos, tan, log, log10, pow, abs, round, floor, ceil, PI, E } = Math;
-       const pi = PI;
-       return (${expr});`,
-    );
-    const val = safeEval(Math);
+    if (/[0-9.]/.test(ch)) {
+      let numStr = "";
+      while (i < len && /[0-9.]/.test(sanitized[i])) {
+        numStr += sanitized[i];
+        i++;
+      }
+      if (i < len && (sanitized[i] === "e" || sanitized[i] === "E")) {
+        numStr += sanitized[i];
+        i++;
+        if (i < len && (sanitized[i] === "+" || sanitized[i] === "-")) {
+          numStr += sanitized[i];
+          i++;
+        }
+        while (i < len && /[0-9]/.test(sanitized[i])) {
+          numStr += sanitized[i];
+          i++;
+        }
+      }
+      const num = Number(numStr);
+      if (Number.isNaN(num)) throw new Error(`Invalid numeric literal: ${numStr}`);
+      tokens.push({ type: "NUMBER", value: num });
+      continue;
+    }
+
+    if (/[a-zA-Z_]/.test(ch)) {
+      let ident = "";
+      while (i < len && /[a-zA-Z0-9_]/.test(sanitized[i])) {
+        ident += sanitized[i];
+        i++;
+      }
+      tokens.push({ type: "IDENT", value: ident.toLowerCase() });
+      continue;
+    }
+
+    if (ch === "(") {
+      tokens.push({ type: "LPAREN", value: "(" });
+      i++;
+      continue;
+    }
+
+    if (ch === ")") {
+      tokens.push({ type: "RPAREN", value: ")" });
+      i++;
+      continue;
+    }
+
+    if (ch === ",") {
+      tokens.push({ type: "COMMA", value: "," });
+      i++;
+      continue;
+    }
+
+    if (["+", "-", "*", "/", "%", "^"].includes(ch)) {
+      tokens.push({ type: "OP", value: ch });
+      i++;
+      continue;
+    }
+
+    throw new Error(`Unexpected character in expression: '${ch}'`);
+  }
+
+  let pos = 0;
+
+  function peek(): Token | undefined {
+    return tokens[pos];
+  }
+
+  function consume(expectedType?: TokenType, expectedVal?: string): Token {
+    const t = tokens[pos];
+    if (!t) throw new Error("Unexpected end of expression");
+    if (expectedType && t.type !== expectedType) {
+      throw new Error(`Expected ${expectedType} but found ${t.type} (${t.value})`);
+    }
+    if (expectedVal && String(t.value) !== expectedVal) {
+      throw new Error(`Expected '${expectedVal}' but found '${t.value}'`);
+    }
+    pos++;
+    return t;
+  }
+
+  function parseExpression(): number {
+    let val = parseTerm();
+    while (pos < tokens.length) {
+      const next = peek();
+      if (next && next.type === "OP" && (next.value === "+" || next.value === "-")) {
+        consume();
+        const rhs = parseTerm();
+        val = next.value === "+" ? val + rhs : val - rhs;
+      } else {
+        break;
+      }
+    }
+    return val;
+  }
+
+  function parseTerm(): number {
+    let val = parsePower();
+    while (pos < tokens.length) {
+      const next = peek();
+      if (next && next.type === "OP" && (next.value === "*" || next.value === "/" || next.value === "%")) {
+        consume();
+        const rhs = parsePower();
+        if (next.value === "*") val = val * rhs;
+        else if (next.value === "/") {
+          if (rhs === 0) throw new Error("Division by zero");
+          val = val / rhs;
+        } else {
+          val = val % rhs;
+        }
+      } else {
+        break;
+      }
+    }
+    return val;
+  }
+
+  function parsePower(): number {
+    const base = parseFactor();
+    const next = peek();
+    if (next && next.type === "OP" && next.value === "^") {
+      consume();
+      const exp = parsePower();
+      return Math.pow(base, exp);
+    }
+    return base;
+  }
+
+  function parseFactor(): number {
+    const next = peek();
+    if (next && next.type === "OP" && (next.value === "+" || next.value === "-")) {
+      consume();
+      const operand = parseFactor();
+      return next.value === "-" ? -operand : operand;
+    }
+    return parsePrimary();
+  }
+
+  function parsePrimary(): number {
+    const t = peek();
+    if (!t) throw new Error("Unexpected end of expression");
+
+    if (t.type === "NUMBER") {
+      consume();
+      return Number(t.value);
+    }
+
+    if (t.type === "LPAREN") {
+      consume();
+      const val = parseExpression();
+      consume("RPAREN", ")");
+      return val;
+    }
+
+    if (t.type === "IDENT") {
+      consume();
+      const name = String(t.value).toLowerCase();
+
+      if (name === "pi") return Math.PI;
+      if (name === "e") return Math.E;
+
+      const next = peek();
+      if (next && next.type === "LPAREN") {
+        consume("LPAREN", "(");
+        const args: number[] = [];
+        if (peek() && peek()?.type !== "RPAREN") {
+          args.push(parseExpression());
+          while (peek() && peek()?.type === "COMMA") {
+            consume("COMMA", ",");
+            args.push(parseExpression());
+          }
+        }
+        consume("RPAREN", ")");
+
+        switch (name) {
+          case "sqrt":
+            return Math.sqrt(args[0] ?? 0);
+          case "cbrt":
+            return Math.cbrt(args[0] ?? 0);
+          case "abs":
+            return Math.abs(args[0] ?? 0);
+          case "round":
+            return Math.round(args[0] ?? 0);
+          case "floor":
+            return Math.floor(args[0] ?? 0);
+          case "ceil":
+            return Math.ceil(args[0] ?? 0);
+          case "sin":
+            return Math.sin(args[0] ?? 0);
+          case "cos":
+            return Math.cos(args[0] ?? 0);
+          case "tan":
+            return Math.tan(args[0] ?? 0);
+          case "log":
+            return Math.log(args[0] ?? 0);
+          case "log10":
+            return Math.log10(args[0] ?? 0);
+          case "log2":
+            return Math.log2(args[0] ?? 0);
+          case "exp":
+            return Math.exp(args[0] ?? 0);
+          case "pow":
+            return Math.pow(args[0] ?? 0, args[1] ?? 1);
+          case "min":
+            return Math.min(...args);
+          case "max":
+            return Math.max(...args);
+          default:
+            throw new Error(`Unknown mathematical function: ${name}`);
+        }
+      }
+
+      throw new Error(`Unknown identifier or constant: ${name}`);
+    }
+
+    throw new Error(`Unexpected token: ${t.type} (${t.value})`);
+  }
+
+  const result = parseExpression();
+  if (pos < tokens.length) {
+    throw new Error(`Unexpected extra tokens after expression: ${tokens[pos].value}`);
+  }
+  return result;
+}
+
+function toolCalculate(_ctx: VaultCtx, a: { expression: string }) {
+  try {
+    const raw = a.expression?.trim();
+    if (!raw) return "Expression cannot be empty.";
+    const val = evaluateMathExpression(raw);
     if (typeof val !== "number" || !Number.isFinite(val)) {
       return `Result: ${String(val)}`;
     }

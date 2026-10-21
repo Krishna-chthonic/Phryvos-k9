@@ -10,7 +10,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import { runMigrations } from "./migrate";
+import { runDeterministicMigrations } from "./migration-manager";
 
 type GlobalDB = {
   __phryvosDb?: Database.Database;
@@ -40,7 +40,7 @@ export function getDb(): Database.Database {
     db.pragma("busy_timeout = 5000");
     db.pragma("mmap_size = 268435456");
     db.pragma("foreign_keys = ON");
-    runMigrations(db);
+    runDeterministicMigrations(db);
     g.__phryvosDb = db;
     g.__phryvosDbPath = p;
   }
@@ -59,6 +59,6 @@ export function initDb(dbPath: string): Database.Database {
   db.pragma("busy_timeout = 5000");
   db.pragma("mmap_size = 268435456");
   db.pragma("foreign_keys = ON");
-  runMigrations(db);
+  runDeterministicMigrations(db);
   return db;
 }

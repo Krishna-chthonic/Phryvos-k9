@@ -88,6 +88,7 @@ export async function POST(
           key: ctx.key,
           client,
           model: selectedModel,
+          allowedTools: dot.tools,
           initialMessages: messages,
           signal: req.signal,
           maxSteps: 8,

@@ -18,8 +18,8 @@ import { getDb, initDb } from "@/lib/db/client";
 import { getVaultState, VaultState } from "@/lib/auth-state";
 import { createSession, destroySession, VaultSession } from "@/lib/session/store";
 import { VaultLockedError } from "@/lib/dal/vault-dal";
-import { checkPassword, derive, splitMaster } from "@/lib/crypto/kdf";
-import { kvGet } from "@/lib/db/kv";
+import { checkPassword, derive, splitMaster, newSalt, KDF_ID } from "@/lib/crypto/kdf";
+import { kvGet, kvSet } from "@/lib/db/kv";
 import { cookies } from "next/headers";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { SESSION_COOKIE } from "@/lib/session/store";
@@ -262,8 +262,12 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
 
 /**
  * Set up initial vault with master PIN and optional duress PIN
+ * Follows the canonical auth table schema (kdf, salt, verifier, created_at).
  */
-export async function setupVault(masterPin: string, duressPin?: string): Promise<void> {
+export async function setupVault(
+  masterPin: string,
+  duressPin?: string
+): Promise<{ masterKey: Buffer; salt: Buffer; verifier: Buffer }> {
   const state = await getVaultState();
   if (state !== "setup_required") {
     throw new Error("Vault already initialized");
@@ -271,26 +275,24 @@ export async function setupVault(masterPin: string, duressPin?: string): Promise
 
   const db = getDb();
 
-  // Generate salts
-  const masterSalt = randomBytes(32);
-  const masterHash = await hashPin(masterPin, masterSalt);
+  // Generate canonical scrypt salt and derive masterKey + verifier
+  const salt = newSalt();
+  const derived = derive(masterPin, salt);
+  const { masterKey, verifier } = splitMaster(derived);
 
-  let duressHash: Buffer | null = null;
-  let duressSalt: Buffer | null = null;
+  // Store auth record in canonical auth table
+  db.prepare(
+    `INSERT INTO auth (kdf, salt, verifier, created_at)
+     VALUES (?, ?, ?, ?)`
+  ).run(KDF_ID, salt, verifier, Date.now());
 
+  // If a duress PIN was configured, store it in kv
   if (duressPin && duressPin !== masterPin) {
-    duressSalt = randomBytes(32);
-    duressHash = await hashPin(duressPin, duressSalt);
+    kvSet("duress_pin", duressPin);
   }
 
-  // Store auth record
-  db.prepare(
-    `INSERT INTO auth (master_key_hash, master_salt, duress_key_hash, duress_salt, created_at)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(masterHash, masterSalt, duressHash, duressSalt, Date.now());
-
-  // Initialize main vault (root dir already created by migration)
-  console.log("[Auth] Vault initialized with master PIN" + (duressPin ? " and duress PIN" : ""));
+  console.log("[Auth] Vault initialized with canonical scrypt master PIN" + (duressPin ? " and duress PIN" : ""));
+  return { masterKey, salt, verifier };
 }
 
 /**

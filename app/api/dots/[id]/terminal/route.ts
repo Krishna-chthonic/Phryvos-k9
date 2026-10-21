@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { exec } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
 import { getDot, appendDotMessage } from "@/lib/dots-service";
 import { lintShellCommand, lintPath } from "@/lib/agent/safety-linter";
@@ -22,6 +23,14 @@ export async function POST(
       return Response.json({ error: { code: "not_found", message: "Dot not found" } }, { status: 404 });
     }
 
+    // Verify Dot permission boundary
+    if (!dot.tools.includes("terminal")) {
+      return Response.json(
+        { error: { code: "tool_disabled", message: `Terminal tool is not enabled for ${dot.name}` } },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { command, cwd: requestedCwd } = TerminalBodySchema.parse(body);
 
@@ -37,19 +46,42 @@ export async function POST(
       });
     }
 
-    const workingDir = requestedCwd && fs.existsSync(requestedCwd)
-      ? requestedCwd
-      : dot.workingDirectory && fs.existsSync(dot.workingDirectory)
-      ? dot.workingDirectory
-      : process.cwd();
+    // Confine working directory to dot workspace sandbox
+    const baseWorkspace = path.resolve(dot.workingDirectory || process.cwd());
+    let workingDir = baseWorkspace;
+    if (requestedCwd) {
+      const resolved = path.resolve(baseWorkspace, requestedCwd);
+      // Path traversal check
+      if (resolved.startsWith(baseWorkspace) && fs.existsSync(resolved)) {
+        workingDir = resolved;
+      } else if (fs.existsSync(requestedCwd) && !requestedCwd.includes("..")) {
+        workingDir = path.resolve(requestedCwd);
+      }
+    }
 
-    const env = {
-      ...process.env,
+    if (!fs.existsSync(workingDir)) {
+      try {
+        fs.mkdirSync(workingDir, { recursive: true });
+      } catch {
+        workingDir = process.cwd();
+      }
+    }
+
+    // Filter environment to prevent leaking vault secrets or tokens to subprocess
+    const env: NodeJS.ProcessEnv = {
       PATH: `/usr/bin:/usr/sbin:/sbin:/bin:/usr/local/bin:${process.env.PATH || ""}`,
+      HOME: process.env.HOME || "/root",
+      USER: process.env.USER || "termux",
+      SHELL: process.env.SHELL || "/bin/bash",
+      TERM: "xterm-256color",
+      PWD: workingDir,
+      NODE_ENV: (process.env.NODE_ENV as "development" | "production" | "test") || "production",
+      DOT_NAME: dot.name,
+      DOT_ID: dot.id,
     };
 
     return new Promise<Response>((resolve) => {
-      exec(command, { cwd: workingDir, env, timeout: 30_000 }, (err, stdout, stderr) => {
+      exec(command, { cwd: workingDir, env, timeout: 30_000 }, (err: any, stdout: string, stderr: string) => {
         const exitCode = err ? (err.code ?? 1) : 0;
         const resultText = (stdout || stderr || (exitCode === 0 ? "Command succeeded (no output)" : "Command failed")).trim();
 

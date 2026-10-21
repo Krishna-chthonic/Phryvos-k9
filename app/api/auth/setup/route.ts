@@ -10,7 +10,7 @@ import { z } from "zod";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/client";
 import { kvSet } from "@/lib/db/kv";
-import { KDF_ID, derive, newSalt, splitMaster } from "@/lib/crypto/kdf";
+
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/defaults";
 import { sessionCookieOptions } from "@/lib/session/cookie";
 import { ThrottleError, assertNotThrottled } from "@/lib/session/throttle";
@@ -58,15 +58,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // Use the new setupVault function that supports duress PIN
-    await setupVault(parsed.data.password, parsed.data.duressPin);
+    // Use the canonical setupVault function that writes kdf, salt, verifier and returns masterKey
+    const { masterKey } = await setupVault(parsed.data.password, parsed.data.duressPin);
 
     kvSet("system_prompt", DEFAULT_SYSTEM_PROMPT);
     kvSet("auto_lock_minutes", "30");
 
-    // Create session after setup
-    const salt = newSalt();
-    const { masterKey } = splitMaster(derive(parsed.data.password, salt));
+    // Open initial session using the exact same masterKey derived from stored salt
     const ttlMs = 30 * 60_000;
     const token = createSession(masterKey, ttlMs);
     const now = Date.now();

@@ -28,6 +28,11 @@ export function DotsApp() {
   // Streaming state
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [pendingApproval, setPendingApproval] = useState<{
+    id: string;
+    tool: string;
+    description: string;
+  } | null>(null);
 
   const activeDot = dots.find((d) => d.id === selectedDotId) || dots[0] || null;
 
@@ -196,6 +201,15 @@ export function DotsApp() {
                 },
               ]);
             }
+          } else if (event === "approval") {
+            const appData = data as { approvalId?: string; tool?: string; description?: string };
+            if (appData.approvalId) {
+              setPendingApproval({
+                id: appData.approvalId,
+                tool: appData.tool || "Action",
+                description: appData.description || "Destructive action requires confirmation",
+              });
+            }
           } else if (event === "error") {
             const errData = data as { message?: string };
             const errMsg = errData.message || "An error occurred during response generation";
@@ -231,6 +245,20 @@ export function DotsApp() {
     } finally {
       setStreaming(false);
       setStreamText("");
+    }
+  };
+
+  const handleResolveApproval = async (approvalId: string, decision: "allow" | "deny") => {
+    try {
+      await fetch(`/api/chat/approvals/${approvalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+    } catch (err) {
+      console.error("Failed to resolve approval:", err);
+    } finally {
+      setPendingApproval(null);
     }
   };
 
@@ -285,6 +313,8 @@ export function DotsApp() {
           desktopRosterOpen={desktopRosterOpen}
           streaming={streaming}
           streamText={streamText}
+          pendingApproval={pendingApproval}
+          onResolveApproval={handleResolveApproval}
           onUpdateDot={handleUpdateDot}
           providers={providers}
           providerId={providerId}
@@ -316,6 +346,13 @@ export function DotsApp() {
           name={activeDot.name}
           role={activeDot.role}
           character={activeDot.character}
+          onSendMessage={handleSendMessage}
+          lastAssistantMessage={
+            messages
+              .filter((m) => m.role === "assistant")
+              .slice(-1)[0]?.content
+          }
+          isStreaming={streaming}
         />
       )}
     </div>

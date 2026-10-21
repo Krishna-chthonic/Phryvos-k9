@@ -71,6 +71,11 @@ export function destroySession(token: string | null | undefined): void {
   if (token) store().delete(token);
 }
 
+/** Invalidate all active vault sessions. */
+export function destroyAllSessions(): void {
+  store().clear();
+}
+
 /** Test/inspection helper. */
 export function sessionCount(): number {
   return store().size;

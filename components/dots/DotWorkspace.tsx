@@ -20,6 +20,7 @@ import {
   Check,
   Bot,
   Users,
+  ShieldAlert,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
@@ -45,6 +46,12 @@ interface DotWorkspaceProps {
   desktopRosterOpen: boolean;
   streaming: boolean;
   streamText: string;
+  pendingApproval?: {
+    id: string;
+    tool: string;
+    description: string;
+  } | null;
+  onResolveApproval?: (id: string, decision: "allow" | "deny") => void;
   onUpdateDot: (updates: Partial<DotDto>) => void;
   providers: ProviderMeta[];
   providerId: number | "";
@@ -156,6 +163,8 @@ export function DotWorkspace({
   desktopRosterOpen,
   streaming,
   streamText,
+  pendingApproval,
+  onResolveApproval,
   onUpdateDot,
   providers,
   providerId,
@@ -522,6 +531,40 @@ export function DotWorkspace({
                 </div>
               )}
             </div>
+
+            {/* Pending Tool Approval Banner */}
+            {pendingApproval && (
+              <div className="shrink-0 px-4 py-3 bg-amber-50/90 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-800 animate-in fade-in slide-in-from-bottom-2">
+                <div className="mx-auto max-w-4xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        Action Requires Confirmation: <span className="font-mono text-amber-700 dark:text-amber-300">{pendingApproval.tool}</span>
+                      </div>
+                      <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                        {pendingApproval.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={() => onResolveApproval?.(pendingApproval.id, "deny")}
+                      className="px-3 py-1.5 rounded-xl border border-zinc-300 text-xs font-semibold text-zinc-700 bg-white hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 cursor-pointer transition active:scale-95"
+                    >
+                      Deny
+                    </button>
+                    <button
+                      onClick={() => onResolveApproval?.(pendingApproval.id, "allow")}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95"
+                    >
+                      Approve & Run
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Composer */}
             <div className="shrink-0 border-t border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 sm:p-4">

@@ -13,6 +13,12 @@ import {
   Copy,
   Check,
   Code2,
+  ArrowLeft,
+  ArrowRight,
+  ExternalLink,
+  MousePointer,
+  Loader2,
+  Search,
 } from "lucide-react";
 import type { DotDto } from "@/lib/dots-service";
 
@@ -26,6 +32,87 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
   const [output, setOutput] = useState<string>("");
   const [running, setRunning] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // OpenBrowser State (ntegrals/openbrowser)
+  const [browserUrl, setBrowserUrl] = useState("https://en.wikipedia.org/wiki/Autonomous_agent");
+  const [browserSession, setBrowserSession] = useState<any>(null);
+  const [browserLoading, setBrowserLoading] = useState(false);
+  const [browserViewTab, setBrowserViewTab] = useState<"dom" | "text">("dom");
+
+  const loadBrowserSession = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/browser?session=${dot.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        setBrowserSession(json.session);
+        if (json.session.currentUrl && json.session.currentUrl !== "about:blank") {
+          setBrowserUrl(json.session.currentUrl);
+        }
+      }
+    } catch {}
+  }, [dot.id]);
+
+  React.useEffect(() => {
+    if (tab === "Browser") {
+      void loadBrowserSession();
+    }
+  }, [tab, loadBrowserSession]);
+
+  const handleBrowserNavigate = async (urlToNav?: string) => {
+    const target = urlToNav || browserUrl.trim();
+    if (!target || browserLoading) return;
+    setBrowserLoading(true);
+    try {
+      const res = await fetch(`/api/browser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: dot.id, action: "navigate", url: target }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setBrowserSession(json.session);
+        setBrowserUrl(json.session.currentUrl);
+      }
+    } catch {} finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserClick = async (elementId: number) => {
+    setBrowserLoading(true);
+    try {
+      const res = await fetch(`/api/browser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: dot.id, action: "click", elementId }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setBrowserSession(json.session);
+        setBrowserUrl(json.session.currentUrl);
+      }
+    } catch {} finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserBack = async () => {
+    setBrowserLoading(true);
+    try {
+      const res = await fetch(`/api/browser`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: dot.id, action: "goBack" }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setBrowserSession(json.session);
+        setBrowserUrl(json.session.currentUrl);
+      }
+    } catch {} finally {
+      setBrowserLoading(false);
+    }
+  };
 
   const handleRunCommand = async (cmdToRun?: string) => {
     const cmd = cmdToRun || command.trim();
@@ -213,12 +300,133 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
         )}
 
         {tab === "Browser" && (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 text-center text-xs text-zinc-400 space-y-2">
-            <Globe className="h-8 w-8 text-sky-400 mx-auto" />
-            <h3 className="font-semibold text-zinc-200 text-sm">Autonomous Web Navigator</h3>
-            <p className="text-zinc-500 max-w-sm mx-auto leading-relaxed">
-              When {dot.name} runs web search or fetches primary sources, inspected URLs and synthesized page extracts will appear here.
-            </p>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-4 text-xs">
+            {/* Browser Address Bar */}
+            <div className="flex items-center gap-2 border-b border-zinc-800 pb-3">
+              <button
+                onClick={handleBrowserBack}
+                disabled={browserLoading}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-800/40 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-40 transition cursor-pointer"
+                title="Go Back"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => handleBrowserNavigate()}
+                disabled={browserLoading}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-800/40 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-40 transition cursor-pointer"
+                title="Reload"
+              >
+                <RotateCcw className={`h-3.5 w-3.5 ${browserLoading ? "animate-spin text-sky-400" : ""}`} />
+              </button>
+
+              <div className="relative flex-1">
+                <Globe className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+                <input
+                  type="text"
+                  value={browserUrl}
+                  onChange={(e) => setBrowserUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleBrowserNavigate()}
+                  placeholder="https://..."
+                  className="w-full h-8 rounded-lg border border-zinc-800 bg-zinc-950/70 pl-8 pr-3 text-xs text-zinc-100 font-mono outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <button
+                onClick={() => handleBrowserNavigate()}
+                disabled={browserLoading || !browserUrl.trim()}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40 transition cursor-pointer"
+              >
+                {browserLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                Navigate
+              </button>
+            </div>
+
+            {/* Page Header Bar */}
+            {browserSession && (
+              <div className="flex items-center justify-between bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-800">
+                <div className="truncate max-w-md">
+                  <div className="font-semibold text-zinc-200 text-xs truncate">
+                    {browserSession.title || "Untitled Page"}
+                  </div>
+                  <div className="font-mono text-[10px] text-zinc-500 truncate">
+                    {browserSession.currentUrl}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5">
+                    <button
+                      onClick={() => setBrowserViewTab("dom")}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                        browserViewTab === "dom" ? "bg-zinc-800 text-sky-400" : "text-zinc-500"
+                      }`}
+                    >
+                      Elements ({browserSession.interactiveElements?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setBrowserViewTab("text")}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
+                        browserViewTab === "text" ? "bg-zinc-800 text-sky-400" : "text-zinc-500"
+                      }`}
+                    >
+                      Page Text
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* View Tab 1: Interactive Elements Tree */}
+            {browserViewTab === "dom" && (
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                {(!browserSession || !browserSession.interactiveElements?.length) ? (
+                  <div className="text-center py-8 text-zinc-500 text-xs">
+                    No active interactive elements. Navigate to a URL above.
+                  </div>
+                ) : (
+                  browserSession.interactiveElements.map((el: any) => (
+                    <div
+                      key={el.id}
+                      className="flex items-center justify-between p-2 rounded-lg border border-zinc-800/60 bg-zinc-950/40 hover:bg-zinc-900/60 transition"
+                    >
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <span className="font-mono text-[10px] font-bold text-sky-400 bg-sky-950/50 px-1.5 py-0.5 rounded border border-sky-800/40">
+                          #{el.id}
+                        </span>
+                        <span className="font-mono text-[9px] uppercase px-1 py-0.2 rounded bg-zinc-800 text-zinc-400">
+                          {el.tag}
+                        </span>
+                        <span className="text-xs text-zinc-200 truncate">
+                          {el.text || el.name || el.placeholder || el.href}
+                        </span>
+                      </div>
+
+                      {el.tag === "a" || el.tag === "button" ? (
+                        <button
+                          onClick={() => handleBrowserClick(el.id)}
+                          disabled={browserLoading}
+                          className="flex items-center gap-1 rounded bg-zinc-800 hover:bg-zinc-700 px-2 py-0.5 text-[10px] font-mono text-zinc-300 hover:text-white transition shrink-0 cursor-pointer"
+                        >
+                          <MousePointer className="h-2.5 w-2.5 text-sky-400" /> Click
+                        </button>
+                      ) : (
+                        <span className="font-mono text-[10px] text-zinc-500 shrink-0">
+                          {el.value ? `="${el.value}"` : "[editable]"}
+                        </span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* View Tab 2: Clean Page Text */}
+            {browserViewTab === "text" && (
+              <div className="p-3 rounded-lg border border-zinc-800 bg-zinc-950/40 text-xs text-zinc-300 font-sans whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto">
+                {browserSession?.pageTextSnippet || "No page text loaded."}
+              </div>
+            )}
           </div>
         )}
 

@@ -84,6 +84,7 @@ import {
   reachRss,
   runAgentReachDoctor,
 } from "./reach-service";
+import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1213,6 +1214,74 @@ async function toolReachDoctor(_ctx: VaultCtx) {
   }
 }
 
+// ---------------------------------------------------------------- OpenBrowser Autonomous Web Engine (ntegrals/openbrowser)
+
+async function toolBrowserNavigate(_ctx: VaultCtx, a: { url: string; sessionId?: string }) {
+  try {
+    const s = await OpenBrowserEngine.navigate(a.sessionId || "default", a.url);
+    return JSON.stringify({
+      title: s.title,
+      url: s.currentUrl,
+      status: s.status,
+      elementCount: s.interactiveElements.length,
+      snapshot: OpenBrowserEngine.snapshot(s.sessionId),
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolBrowserClick(_ctx: VaultCtx, a: { elementId: number; sessionId?: string }) {
+  try {
+    const s = await OpenBrowserEngine.click(a.sessionId || "default", a.elementId);
+    return JSON.stringify({
+      success: true,
+      newUrl: s.currentUrl,
+      title: s.title,
+      snapshot: OpenBrowserEngine.snapshot(s.sessionId),
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolBrowserType(_ctx: VaultCtx, a: { elementId: number; text: string; sessionId?: string }) {
+  try {
+    const s = OpenBrowserEngine.type(a.sessionId || "default", a.elementId, a.text);
+    return JSON.stringify({
+      success: true,
+      elementId: a.elementId,
+      typedValue: a.text,
+      currentUrl: s.currentUrl,
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolBrowserSubmit(_ctx: VaultCtx, a: { elementId?: number; sessionId?: string }) {
+  try {
+    const s = await OpenBrowserEngine.submit(a.sessionId || "default", a.elementId);
+    return JSON.stringify({
+      success: true,
+      currentUrl: s.currentUrl,
+      title: s.title,
+      snapshot: OpenBrowserEngine.snapshot(s.sessionId),
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolBrowserSnapshot(_ctx: VaultCtx, a: { sessionId?: string }) {
+  try {
+    const s = OpenBrowserEngine.getOrCreateSession(a.sessionId || "default");
+    return OpenBrowserEngine.snapshot(s.sessionId);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -2299,6 +2368,99 @@ export function ensureAgentTools(): void {
     (c) => toolReachDoctor(c),
     false,
     z.object({}),
+  );
+
+  // ---------------------------------------------------------------- OpenBrowser Interactive Web Engine (ntegrals/openbrowser)
+
+  reg(
+    "browser_navigate",
+    "Navigate the stateful browser to a URL. Returns the loaded page title, HTTP status, and a numbered tree of interactive DOM elements (#1, #2, etc.) for clicking and typing.",
+    P(
+      "browser_navigate",
+      "Navigate browser to URL",
+      { url: { type: "string", description: "Target URL (e.g. 'https://github.com')" } },
+      { sessionId: { type: "string", description: "Browser session ID (default: 'default')" } },
+    ),
+    (c, a) => toolBrowserNavigate(c, a),
+    false,
+    z.object({
+      url: z.string(),
+      sessionId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "browser_click",
+    "Click on an interactive link or button on the current page using its numbered element ID from the snapshot (e.g. elementId: 3).",
+    P(
+      "browser_click",
+      "Click interactive element",
+      { elementId: { type: "number", description: "Numbered element ID from browser snapshot" } },
+      { sessionId: { type: "string", description: "Browser session ID" } },
+    ),
+    (c, a) => toolBrowserClick(c, a),
+    false,
+    z.object({
+      elementId: z.number(),
+      sessionId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "browser_type",
+    "Type text into an input field or search bar on the current page using its numbered element ID.",
+    P(
+      "browser_type",
+      "Type into input element",
+      {
+        elementId: { type: "number", description: "Numbered input element ID" },
+        text: { type: "string", description: "Text string to enter" },
+      },
+      { sessionId: { type: "string", description: "Browser session ID" } },
+    ),
+    (c, a) => toolBrowserType(c, a),
+    false,
+    z.object({
+      elementId: z.number(),
+      text: z.string(),
+      sessionId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "browser_submit",
+    "Submit a form or search input on the current page. If elementId is provided, clicks that submit button; otherwise submits active form inputs.",
+    P(
+      "browser_submit",
+      "Submit form",
+      {},
+      {
+        elementId: { type: "number", description: "Optional submit button element ID" },
+        sessionId: { type: "string", description: "Browser session ID" },
+      },
+    ),
+    (c, a) => toolBrowserSubmit(c, a),
+    false,
+    z.object({
+      elementId: z.number().optional(),
+      sessionId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "browser_snapshot",
+    "Get the current snapshot of the browser session showing the current URL, page title, numbered interactive elements tree, and visible text extract.",
+    P(
+      "browser_snapshot",
+      "Get browser snapshot",
+      {},
+      { sessionId: { type: "string", description: "Browser session ID" } },
+    ),
+    (c, a) => toolBrowserSnapshot(c, a),
+    false,
+    z.object({
+      sessionId: z.string().optional(),
+    }),
   );
 }
 

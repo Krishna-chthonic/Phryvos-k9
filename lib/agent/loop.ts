@@ -11,6 +11,7 @@ import {
   requestApproval,
   type ApprovalOutcome,
 } from "./guardrails";
+import { dshChassis } from "@/lib/plugins/dsh-chassis";
 
 /**
  * The provider-agnostic agent loop: run a turn, execute tool calls
@@ -114,7 +115,11 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
   const maxSteps = deps.maxSteps ?? MAX_AGENT_STEPS;
   const providerTimeout = deps.providerTimeoutMs ?? PROVIDER_TIMEOUT_MS;
   const specs = toolSpecs();
-  const messages: UnifiedMessage[] = [...deps.initialMessages];
+  const initialTransformed = await dshChassis.runBeforeTurnHooks(ctx, deps.initialMessages, {
+    mode: deps.mode,
+    effort: deps.effort,
+  });
+  const messages: UnifiedMessage[] = [...initialTransformed];
 
   let accumulatedThought = "";
   let inThoughtBlock = false;
@@ -215,7 +220,8 @@ MANDATORY NEXT STEPS:
 
       // Final turn: conclusion reached!
       closeThoughtBlock();
-      const finalText = (accumulatedThought ? accumulatedThought : "") + (turn.text || turnText);
+      const rawText = (accumulatedThought ? accumulatedThought : "") + (turn.text || turnText);
+      const finalText = await dshChassis.runAfterTurnHooks(ctx, rawText);
       deps.appendAssistant(finalText, allExecutedTools);
       return { text: finalText, finish: turn.finish === "tool_calls" ? "stop" : turn.finish, toolSteps };
     }
@@ -233,7 +239,8 @@ MANDATORY NEXT STEPS:
         providerTimeout,
         "provider",
       );
-      const finalText = (accumulatedThought ? accumulatedThought : "") + final.text;
+      const rawText = (accumulatedThought ? accumulatedThought : "") + final.text;
+      const finalText = await dshChassis.runAfterTurnHooks(ctx, rawText);
       deps.appendAssistant(finalText, allExecutedTools);
       return { text: finalText, finish: "capped", toolSteps };
     }
@@ -259,9 +266,23 @@ MANDATORY NEXT STEPS:
 
       emitThoughtDelta(`\n> 🔍 Action: ${tc.name} (${summarizeToolArgs(tc.name, tc.args)})\n`);
 
+      const stepStart = Date.now();
       let approval: ApprovalOutcome | undefined;
       let blocked = false;
-      if (isDestructive(tc.name)) {
+
+      // DeepSeek Harness onToolCall hook
+      const hookDecision = await dshChassis.runToolCallHooks(ctx, tc.name, tc.args);
+      if (!hookDecision.allow) {
+        blocked = true;
+        approval = {
+          decision: "denied",
+          detail: `Blocked by policy: ${hookDecision.reason || "Safety check"}`,
+        };
+      } else if (hookDecision.modifiedArgs) {
+        tc.args = hookDecision.modifiedArgs;
+      }
+
+      if (!blocked && isDestructive(tc.name)) {
         if (deps.autoApproveTools) {
           approval = {
             decision: "allowed",
@@ -301,6 +322,7 @@ MANDATORY NEXT STEPS:
         result = truncateResult(result);
       }
 
+      const durationMs = Date.now() - stepStart;
       toolSteps++;
       messages.push({ role: "tool", content: result, toolCallId: tc.id, name: tc.name });
       deps.onStep({
@@ -310,6 +332,15 @@ MANDATORY NEXT STEPS:
         args: tc.args,
         result,
         approval: approval?.decision,
+      });
+
+      // DeepSeek Harness onStep hook
+      void dshChassis.runStepHooks(ctx, {
+        step: toolSteps,
+        tool: tc.name,
+        args: tc.args,
+        result,
+        durationMs,
       });
     }
   }

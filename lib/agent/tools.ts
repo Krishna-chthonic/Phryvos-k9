@@ -98,6 +98,7 @@ import {
 } from "@/lib/orca/orca-engine";
 import { paperclipEngine } from "@/lib/paperclip/paperclip-engine";
 import { ifixaiEngine } from "@/lib/audit/ifixai-engine";
+import { eccEngine, type RuleCategory } from "@/lib/ecc/ecc-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1674,6 +1675,53 @@ ${categories}
 ${sc.remediationPatches.map((p) => `  • ${p}`).join("\n")}`;
   } catch (err) {
     return `iFixAi scorecard error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- ecc (surgical prompt contracts & verification gates)
+
+function toolEccListRules(_ctx: VaultCtx, a: { category?: string }) {
+  try {
+    const state = eccEngine.getState();
+    let rules = state.learnedRules;
+    if (a.category) {
+      rules = rules.filter((r) => r.category.toLowerCase() === a.category!.toLowerCase());
+    }
+    if (rules.length === 0) return "No active ECC rules matching criteria.";
+    return `Active ECC Rules (${rules.length}):\n` + rules.map((r, i) => `${i + 1}. [${r.category.toUpperCase()}] ${r.title}\n   ${r.ruleText}`).join("\n\n");
+  } catch (err) {
+    return `ECC list error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolEccLearnRule(ctx: VaultCtx, a: { title: string; ruleText: string; category?: "coding" | "safety" | "formatting" | "workflow" | "user_preference" }) {
+  try {
+    const rule = eccEngine.learnRule(a.title, a.ruleText, a.category || "coding", "user_correction", ctx);
+    return `Learned new rule #${rule.id} [${rule.category.toUpperCase()}]: "${rule.title}" - Saved to permanent vault rulebook.`;
+  } catch (err) {
+    return `ECC learn error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolEccVerifyGate(_ctx: VaultCtx, a: { hasTypeScriptPassed: boolean; hasBuildPassed: boolean; commentsPreserved: boolean; unrelatedDiffsAvoided: boolean }) {
+  try {
+    const res = eccEngine.runVerificationGate(a);
+    const checkLines = res.checks.map((c) => `• [${c.passed ? "PASS" : "FAIL"}] ${c.name}: ${c.description} (${c.evidence})`).join("\n");
+    return `Quality Verification Gate: ${res.overallPassed ? "PASSED (100%) ✅" : "FAILED ❌"}\n${checkLines}`;
+  } catch (err) {
+    return `ECC verification error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolEccGetContract(_ctx: VaultCtx, a: { phase?: "plan" | "implement" | "verify" }) {
+  try {
+    const state = eccEngine.getState();
+    const phase = a.phase || "implement";
+    const contract = state.contracts[phase];
+    if (!contract) return `No contract found for phase "${phase}".`;
+    return `${contract.title}:\n` + contract.systemRules.map((r, i) => `${i + 1}. ${r}`).join("\n");
+  } catch (err) {
+    return `ECC contract error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3387,6 +3435,84 @@ export function ensureAgentTools(): void {
     (c) => toolIFixAiGetScorecard(c),
     false,
     z.object({}),
+  );
+
+  // ---------------------------------------------------------------- ecc tools
+
+  reg(
+    "ecc_list_rules",
+    "List active surgical prompt contracts, engineering guidelines, and learned lessons from prior executions.",
+    P(
+      "ecc_list_rules",
+      "List surgical rules and contracts",
+      {},
+      { category: { type: "string", description: "Filter by category: 'coding' | 'safety' | 'formatting' | 'workflow' | 'user_preference'" } },
+    ),
+    (c, a) => toolEccListRules(c, a),
+    false,
+    z.object({
+      category: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "ecc_learn_rule",
+    "Persist a new learned rule or engineering constraint into the permanent vault rulebook so future agent turns never repeat the same mistake.",
+    P(
+      "ecc_learn_rule",
+      "Persist learned rule to rulebook",
+      {
+        title: { type: "string", description: "Rule title or constraint summary" },
+        ruleText: { type: "string", description: "Detailed rule instruction" },
+      },
+      { category: { type: "string", description: "Category: 'coding' | 'safety' | 'formatting' | 'workflow' | 'user_preference'" } },
+    ),
+    (c, a) => toolEccLearnRule(c, a),
+    false,
+    z.object({
+      title: z.string(),
+      ruleText: z.string(),
+      category: z.enum(["coding", "safety", "formatting", "workflow", "user_preference"]).optional(),
+    }),
+  );
+
+  reg(
+    "ecc_verify_gate",
+    "Evaluate execution quality against the ECC Quality Verification Gate (type check, build verification, comment preservation, scope confinement).",
+    P(
+      "ecc_verify_gate",
+      "Verify quality verification gate",
+      {
+        hasTypeScriptPassed: { type: "boolean", description: "Did tsc --noEmit pass?" },
+        hasBuildPassed: { type: "boolean", description: "Did production build pass?" },
+        commentsPreserved: { type: "boolean", description: "Were existing comments preserved?" },
+        unrelatedDiffsAvoided: { type: "boolean", description: "Were out-of-scope diffs avoided?" },
+      },
+    ),
+    (c, a) => toolEccVerifyGate(c, a),
+    false,
+    z.object({
+      hasTypeScriptPassed: z.boolean(),
+      hasBuildPassed: z.boolean(),
+      commentsPreserved: z.boolean(),
+      unrelatedDiffsAvoided: z.boolean(),
+    }),
+  );
+
+  reg(
+    "ecc_get_contract",
+    "Retrieve system prompt contract rules for planning, implementation, or verification phases.",
+    P(
+      "ecc_get_contract",
+      "Get prompt contract rules",
+      {},
+      { phase: { type: "string", description: "Phase: 'plan' | 'implement' | 'verify'" } },
+    ),
+    (c, a) => toolEccGetContract(c, a),
+    false,
+    z.object({
+      phase: z.enum(["plan", "implement", "verify"]).optional(),
+    }),
   );
 }
 

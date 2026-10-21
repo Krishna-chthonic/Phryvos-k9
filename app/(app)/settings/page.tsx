@@ -21,6 +21,7 @@ import { FreeModelsPanel } from "@/components/settings/FreeModelsPanel";
 import { PluginManagerPanel } from "@/components/settings/PluginManagerPanel";
 import { DigUpPanel } from "@/components/settings/DigUpPanel";
 import { IFixAiPanel } from "@/components/settings/IFixAiPanel";
+import { EccRulesPanel } from "@/components/settings/EccRulesPanel";
 import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -47,6 +48,7 @@ export default function SettingsPage() {
         <PluginManagerPanel />
         <DigUpPanel />
         <IFixAiPanel />
+        <EccRulesPanel />
         <FreeModelsPanel />
         <ProvidersPanel />
         <SystemPromptPanel />

@@ -23,7 +23,7 @@ import {
   Eye,
   Check,
 } from "lucide-react";
-import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowNodeType } from "@/lib/workflows/workflow-engine";
+import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowNodeType } from "@/lib/workflows/workflow-types";
 
 interface WorkflowCanvasProps {
   initialWorkflows: Workflow[];

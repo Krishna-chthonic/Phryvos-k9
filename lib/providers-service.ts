@@ -8,6 +8,10 @@ import {
 } from "@/lib/ai/adapters/openai-compatible";
 import { wrapLlmClientWithScrubber } from "@/lib/ai/pii-scrubber";
 import type { LlmClient } from "@/lib/ai/types";
+import {
+  ensureFreeProviderConfigured,
+  createFreeFrontierClient,
+} from "@/lib/ai/free-frontier-service";
 
 export interface VaultCtx {
   db: Database.Database;
@@ -185,9 +189,17 @@ export function deleteProvider(ctx: VaultCtx, id: number): void {
 }
 
 export function defaultProvider(ctx: VaultCtx): ProviderMeta | null {
-  const r = ctx.db
+  let r = ctx.db
     .prepare("SELECT * FROM ai_providers ORDER BY is_default DESC, created_at LIMIT 1")
     .get() as ProviderRow | undefined;
+  if (!r) {
+    try {
+      ensureFreeProviderConfigured(ctx);
+      r = ctx.db
+        .prepare("SELECT * FROM ai_providers ORDER BY is_default DESC, created_at LIMIT 1")
+        .get() as ProviderRow | undefined;
+    } catch {}
+  }
   return r ? toMeta(r) : null;
 }
 
@@ -212,10 +224,16 @@ export function connectionFor(ctx: VaultCtx, id: number): ProviderConnection {
 }
 
 export function createLlmClient(ctx: VaultCtx, providerId: number, options?: { skipScrubber?: boolean }): LlmClient {
-  const conn = connectionFor(ctx, providerId);
-  const raw = conn.kind === "anthropic"
-    ? createAnthropicClient(conn)
-    : createOpenAiCompatibleClient(conn);
+  const meta = getProviderMeta(ctx, providerId);
+  let raw: LlmClient;
+  if (meta.name.includes("Free Frontier") || meta.baseUrl.includes("pollinations")) {
+    raw = createFreeFrontierClient();
+  } else {
+    const conn = connectionFor(ctx, providerId);
+    raw = conn.kind === "anthropic"
+      ? createAnthropicClient(conn)
+      : createOpenAiCompatibleClient(conn);
+  }
   return options?.skipScrubber ? raw : wrapLlmClientWithScrubber(raw);
 }
 

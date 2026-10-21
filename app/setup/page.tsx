@@ -1,86 +1,145 @@
 "use client";
 
-import { useState } from "react";
+import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { ShieldCheck, AlertCircle } from "lucide-react";
+import { authApi } from "@/lib/api/client";
+import { keyring } from "@/lib/keyring";
 
 export default function SetupPage() {
   const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [password, setPassword] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [duressPin, setDuressPin] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function handleSetup(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
+    if (loading) return;
+
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      setBusy(false);
+      setError("Master password must be at least 8 characters");
       return;
     }
+
     if (password !== confirm) {
-      setError("Passwords do not match.");
-      setBusy(false);
+      setError("Passwords do not match");
       return;
     }
-    const res = await fetch("/api/auth/setup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) {
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: { message?: string };
-      };
-      setError(json.error?.message ?? "Setup failed. Is the app already initialized?");
-      setBusy(false);
+
+    if (duressPin && duressPin === password) {
+      setError("Duress PIN cannot be identical to the master password");
       return;
     }
-    router.replace("/vault");
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await authApi.setup(password, duressPin || undefined);
+      if (res.success) {
+        // Unlock immediately with the new password
+        const unlockRes = await authApi.unlock(password);
+        if (unlockRes.success) {
+          keyring.setUnlocked(true);
+          router.replace("/chat");
+        } else {
+          router.replace("/unlock");
+        }
+      } else {
+        setError("Setup failed. Vault may already be initialized.");
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to initialize vault");
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-          <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            phryvos k9 — create your vault
-          </h1>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[var(--bg-0)] text-[var(--fg-0)] select-none">
+      <div className="w-full max-w-[360px] flex flex-col items-center text-center">
+        {/* Geometric Logo Mark */}
+        <div className="h-12 w-12 rounded-[var(--radius-md)] bg-[var(--accent-soft)] border border-[var(--accent-border)] flex items-center justify-center mb-4 text-[var(--accent)] shadow-none">
+          <ShieldCheck className="h-6 w-6 stroke-[1.5]" />
         </div>
-        <form onSubmit={submit} className="space-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs">
-          <Input
-            type="password"
-            placeholder="Vault password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoFocus
-          />
-          <Input
-            type="password"
-            placeholder="Confirm password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-          <Button type="submit" disabled={busy} className="w-full">
-            {busy ? "Creating vault…" : "Create vault"}
-          </Button>
-          <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-            This password encrypts everything in your vault (files, chat,
-            provider keys). If you lose it, the data cannot be recovered.
-          </p>
+
+        {/* Title */}
+        <h1 className="text-[var(--text-xl)] font-semibold text-[var(--fg-0)] tracking-tight">
+          Initialize Phryvos Vault
+        </h1>
+        <p className="text-[var(--text-sm)] text-[var(--fg-2)] mt-1.5 mb-8">
+          Create master password for envelope encryption
+        </p>
+
+        {/* Form */}
+        <form onSubmit={handleSetup} className="w-full space-y-4 text-left">
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-[var(--radius-sm)] bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] text-[var(--text-xs)]">
+              <AlertCircle className="h-4 w-4 shrink-0 stroke-[1.5]" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[var(--text-xs)] font-medium text-[var(--fg-1)] mb-1.5">
+              Master Password (min 8 chars)
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••••"
+              autoFocus
+              disabled={loading}
+              className="w-full h-[40px] px-3.5 bg-[var(--bg-1)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-base)] text-[var(--fg-0)] placeholder:text-[var(--fg-2)] outline-none transition-colors duration-120 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[var(--text-xs)] font-medium text-[var(--fg-1)] mb-1.5">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="••••••••••••"
+              disabled={loading}
+              className="w-full h-[40px] px-3.5 bg-[var(--bg-1)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-base)] text-[var(--fg-0)] placeholder:text-[var(--fg-2)] outline-none transition-colors duration-120 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+          </div>
+
+          <div className="pt-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[var(--text-xs)] font-medium text-[var(--fg-1)]">
+                Duress PIN (Optional)
+              </label>
+              <span className="text-[10px] text-[var(--fg-3)]">Decoy vault</span>
+            </div>
+            <input
+              type="password"
+              value={duressPin}
+              onChange={(e) => setDuressPin(e.target.value)}
+              placeholder="Alternative emergency PIN"
+              disabled={loading}
+              className="w-full h-[40px] px-3.5 bg-[var(--bg-1)] border border-[var(--border)] rounded-[var(--radius-sm)] text-[var(--text-base)] text-[var(--fg-0)] placeholder:text-[var(--fg-2)] outline-none transition-colors duration-120 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !password.trim()}
+            className="w-full h-[40px] mt-2 px-4 rounded-[var(--radius-sm)] bg-[var(--accent)] text-[var(--accent-fg)] text-[var(--text-md)] font-medium transition-colors hover:bg-[var(--accent-hover)] active:bg-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 outline-none focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+          >
+            {loading ? "Creating Vault..." : "Create Encrypted Vault"}
+          </button>
         </form>
+
+        <p className="text-[11px] text-[var(--fg-3)] mt-8">
+          scrypt N=32768 derivation &middot; AES-256-GCM authenticated encryption
+        </p>
       </div>
     </div>
   );

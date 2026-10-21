@@ -21,6 +21,7 @@ import {
   Bot,
   Users,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
@@ -52,6 +53,7 @@ interface DotWorkspaceProps {
     description: string;
   } | null;
   onResolveApproval?: (id: string, decision: "allow" | "deny") => void;
+  onDeleteDot?: (id: string) => void;
   onUpdateDot: (updates: Partial<DotDto>) => void;
   providers: ProviderMeta[];
   providerId: number | "";
@@ -165,6 +167,7 @@ export function DotWorkspace({
   streamText,
   pendingApproval,
   onResolveApproval,
+  onDeleteDot,
   onUpdateDot,
   providers,
   providerId,
@@ -670,6 +673,32 @@ export function DotWorkspace({
                   ))}
                 </div>
               </div>
+
+              {/* Danger Zone: Permanent Deletion */}
+              {onDeleteDot && (
+                <div className="pt-6 border-t border-red-200/80 dark:border-red-950/60">
+                  <div className="rounded-2xl border border-red-200 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-red-900 dark:text-red-200 flex items-center gap-1.5">
+                        <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                        Danger Zone: Remove AI Coworker
+                      </h4>
+                      <p className="text-[11px] text-red-700/80 dark:text-red-300/80 mt-1 leading-relaxed">
+                        Permanently delete &ldquo;{dot.name}&rdquo; along with all conversation transcripts, autonomous tasks, and knowledge spaces.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onDeleteDot(dot.id)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer shrink-0 self-start sm:self-auto"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete {dot.name}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

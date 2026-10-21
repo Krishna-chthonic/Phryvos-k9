@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Plus, Sparkles, X, Menu, ArrowLeft, MessageSquare } from "lucide-react";
+import { Plus, Sparkles, X, Menu, ArrowLeft, MessageSquare, Trash2 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import type { DotDto } from "@/lib/dots-service";
 
@@ -11,6 +11,7 @@ interface DotRosterProps {
   selectedDotId: string | null;
   onSelectDot: (id: string) => void;
   onOpenNewDotDialog: () => void;
+  onDeleteDot?: (id: string) => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
   desktopOpen?: boolean;
@@ -21,6 +22,7 @@ export function DotRoster({
   selectedDotId,
   onSelectDot,
   onOpenNewDotDialog,
+  onDeleteDot,
   mobileOpen,
   onCloseMobile,
   desktopOpen = true,
@@ -132,6 +134,22 @@ export function DotRoster({
                   </div>
                   <p className="truncate text-[11px] text-zinc-400 mt-0.5">{dot.role}</p>
                 </div>
+
+                {/* Delete Coworker Button */}
+                {onDeleteDot && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteDot(dot.id);
+                    }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition shrink-0 opacity-70 sm:opacity-0 sm:group-hover:opacity-100 cursor-pointer"
+                    title={`Delete ${dot.name}`}
+                    aria-label={`Delete ${dot.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </button>
             );
           })}

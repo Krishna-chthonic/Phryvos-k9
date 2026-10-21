@@ -262,6 +262,30 @@ export function DotsApp() {
     }
   };
 
+  const handleDeleteDot = async (id: string) => {
+    const targetDot = dots.find((d) => d.id === id);
+    const name = targetDot?.name || "this AI coworker";
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete "${name}"? All associated tasks, spaces, and conversation history will be removed.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/dots/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        const next = dots.filter((d) => d.id !== id);
+        setDots(next);
+        if (selectedDotId === id) {
+          setSelectedDotId(next[0]?.id || null);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete dot:", err);
+    }
+  };
+
   const handleUpdateDot = async (updates: Partial<DotDto>) => {
     if (!activeDot) return;
     try {
@@ -294,6 +318,7 @@ export function DotsApp() {
         selectedDotId={activeDot?.id || null}
         onSelectDot={(id) => setSelectedDotId(id)}
         onOpenNewDotDialog={() => setNewDotDialogOpen(true)}
+        onDeleteDot={handleDeleteDot}
         mobileOpen={mobileRosterOpen}
         onCloseMobile={() => setMobileRosterOpen(false)}
         desktopOpen={desktopRosterOpen}
@@ -315,6 +340,7 @@ export function DotsApp() {
           streamText={streamText}
           pendingApproval={pendingApproval}
           onResolveApproval={handleResolveApproval}
+          onDeleteDot={handleDeleteDot}
           onUpdateDot={handleUpdateDot}
           providers={providers}
           providerId={providerId}

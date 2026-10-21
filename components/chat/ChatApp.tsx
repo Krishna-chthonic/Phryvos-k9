@@ -606,6 +606,7 @@ export function ChatApp() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!confirm("Delete this conversation?")) return;
                   chatApi.deleteSession(s.id).then(() => {
                     setSessions((x) => x.filter((y) => y.id !== s.id));
                     if (s.id === active) {
@@ -614,10 +615,13 @@ export function ChatApp() {
                     }
                   });
                 }}
-                className={`hidden h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-red-500 group-hover:flex ${
-                  s.id === active ? "hover:text-red-300 text-zinc-300" : ""
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition cursor-pointer ${
+                  s.id === active
+                    ? "opacity-100 text-zinc-500 dark:text-zinc-400"
+                    : "opacity-70 sm:opacity-0 sm:group-hover:opacity-100"
                 }`}
                 title="Delete chat"
+                aria-label="Delete chat"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -762,6 +766,25 @@ export function ChatApp() {
                 aria-label="Retry"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {/* Delete Active Chat Button */}
+            {active && !streaming && (
+              <button
+                onClick={() => {
+                  if (!confirm("Are you sure you want to delete this conversation?")) return;
+                  chatApi.deleteSession(active).then(() => {
+                    setSessions((x) => x.filter((y) => y.id !== active));
+                    setActive(null);
+                    setMessages([]);
+                  });
+                }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-800 text-zinc-500 dark:text-zinc-400 transition cursor-pointer"
+                title="Delete this chat"
+                aria-label="Delete chat"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
               </button>
             )}
 

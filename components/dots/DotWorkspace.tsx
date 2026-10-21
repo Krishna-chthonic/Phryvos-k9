@@ -22,6 +22,8 @@ import {
   Users,
   ShieldAlert,
   Trash2,
+  Workflow,
+  Sparkles,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
@@ -30,6 +32,8 @@ import { DotTasksPanel } from "./DotTasksPanel";
 import { RecipesPanel } from "./RecipesPanel";
 import { SwarmCoordinatorPanel } from "./SwarmCoordinatorPanel";
 import { PaperclipOrgPanel } from "./PaperclipOrgPanel";
+import { WorkflowCanvas } from "@/components/workflows/WorkflowCanvas";
+import { BUILTIN_WORKFLOW_TEMPLATES } from "@/lib/workflows/workflow-engine";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
@@ -65,6 +69,7 @@ interface DotWorkspaceProps {
 export type WorkspaceTabId =
   | "chat"
   | "tasks"
+  | "workflows"
   | "computer"
   | "spaces"
   | "recipes"
@@ -91,6 +96,15 @@ const MODULES: ModuleConfig[] = [
     description: "Live conversation, memory injection & audio calls with Dot",
     icon: MessageSquare,
     iconColor: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800",
+  },
+  {
+    id: "workflows",
+    label: "Graph Automations",
+    shortLabel: "Flows",
+    description: "Visual node pipelines, video rendering, YouTube auto-publishers",
+    icon: Workflow,
+    iconColor: "text-purple-500 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800",
+    badge: "DAG",
   },
   {
     id: "tasks",
@@ -262,6 +276,13 @@ export function DotWorkspace({
                 </span>
                 <span className="hidden md:inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 capitalize">
                   {dot.status}
+                </span>
+                <span
+                  onClick={() => navigator.clipboard?.writeText(`/${dot.name.toLowerCase()}`)}
+                  className="hidden xl:inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-semibold text-sky-700 border border-sky-200/60 dark:bg-sky-950/40 dark:border-sky-800/60 dark:text-sky-300 font-mono cursor-pointer hover:bg-sky-100 dark:hover:bg-sky-900/50 transition"
+                  title="Click to copy Telegram command for this Dot"
+                >
+                  📱 /{dot.name.toLowerCase()}
                 </span>
               </div>
             </div>
@@ -600,6 +621,12 @@ export function DotWorkspace({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "workflows" && (
+          <div className="h-full w-full overflow-hidden">
+            <WorkflowCanvas initialWorkflows={BUILTIN_WORKFLOW_TEMPLATES} />
           </div>
         )}
 

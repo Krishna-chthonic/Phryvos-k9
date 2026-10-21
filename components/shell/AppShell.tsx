@@ -32,6 +32,7 @@ import {
   PanelLeftOpen,
   Keyboard,
   Bot,
+  Workflow,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CommandPalette } from "@/components/shell/CommandPalette";
@@ -42,6 +43,7 @@ import { cyberAudio } from "@/lib/audio/cyberdeck-audio";
 const NAV = [
   { href: "/chat", label: "Chat", icon: MessageSquare, description: "AI Agent & Data" },
   { href: "/dots", label: "Dots", icon: Bot, description: "AI Coworkers" },
+  { href: "/workflows", label: "Flows", icon: Workflow, description: "Graph Automations" },
   { href: "/vault", label: "Files", icon: Folder, description: "Encrypted Storage" },
   { href: "/tasks", label: "Tasks", icon: ListChecks, description: "Daily & Recurring" },
   { href: "/projects", label: "Projects", icon: SquareKanban, description: "Kanban & Gantt" },

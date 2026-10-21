@@ -83,12 +83,16 @@ export async function POST(
       try {
         ensureAgentTools();
 
+        const allowedTools = (dot.tools.includes("*") || dot.tools.includes("all") || dot.tools.includes("omni"))
+          ? undefined
+          : dot.tools;
+
         const result = await runAgentTurn({
           db: ctx.db,
           key: ctx.key,
           client,
           model: selectedModel,
-          allowedTools: dot.tools,
+          allowedTools,
           initialMessages: messages,
           signal: req.signal,
           maxSteps: 8,

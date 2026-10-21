@@ -178,11 +178,16 @@ export class DotRunner {
         },
       ];
 
+      const allowedTools = (dot.tools.includes("*") || dot.tools.includes("all") || dot.tools.includes("omni"))
+        ? undefined
+        : (dot.tools.length ? dot.tools : undefined);
+
       const result = await runAgentTurn({
         db,
         key,
         client,
         model: selectedModel,
+        allowedTools,
         initialMessages: messages,
         maxSteps: 8,
         autoApproveTools: true, // Autonomous execution

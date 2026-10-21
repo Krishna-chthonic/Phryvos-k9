@@ -12,7 +12,8 @@
 
 import type Database from "better-sqlite3";
 import { getActiveMasterKey } from "@/lib/session/store";
-import { listDots, getDot, appendDotMessage, listDotTasks } from "@/lib/dots-service";
+import { listDots, getDot, appendDotMessage, listDotTasks, listDotMessages } from "@/lib/dots-service";
+import { createSession, getSession, listMessages, appendMessage } from "@/lib/chat-service";
 import { defaultProvider, createLlmClient } from "@/lib/providers-service";
 import { runAgentTurn } from "@/lib/agent/loop";
 import { ensureAgentTools } from "@/lib/agent/tools";
@@ -666,6 +667,17 @@ export class TelegramGatewayService {
       return;
     }
 
+    // Reset/start fresh session command
+    if (rawText === "/new" || rawText === "/reset") {
+      db.prepare("DELETE FROM kv WHERE key = ?").run(`tg_session_${chatId}`);
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: "✨ *New Session Started*\n\nYour active chat session has been reset. The next message will spawn a fresh conversation visible in your K9 localhost dashboard.",
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
     // Check if targeting specific Dot: /dot <name> <prompt> or /<dotName> <prompt>
     let targetDotName: string | null = null;
     let prompt = rawText;
@@ -687,7 +699,7 @@ export class TelegramGatewayService {
     // Send typing notification
     await callTelegramApi(botToken, "sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
 
-    // Execute through Dot or Default Assistant
+    // Execute through Dot or Default Assistant with full Live DB persistence
     try {
       ensureAgentTools();
       const provider = defaultProvider(ctx);
@@ -696,30 +708,134 @@ export class TelegramGatewayService {
       }
 
       const client = createLlmClient(ctx, provider.id);
-      let systemPrompt = "You are Phryvos-K9, a helpful and secure personal assistant.";
       let model = provider.models[0] || "default";
 
+      // -------------------------------------------------------------
+      // PATH A: Target Dot Conversation (Synced to Dot Workspace)
+      // -------------------------------------------------------------
       if (targetDotName) {
         const dots = listDots(ctx);
         const dot = dots.find((d) => d.name.toLowerCase() === targetDotName!.toLowerCase());
-        if (dot) {
-          systemPrompt = `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as coworker "${dot.name}" (${dot.role}). Working environment: "${dot.workingDirectory}". Enabled tools: ${dot.tools.join(", ")}. Provide concise, high-value responses over Telegram.`;
-          if (dot.model && dot.model !== "auto") model = dot.model;
+        if (!dot) {
+          await callTelegramApi(botToken, "sendMessage", {
+            chat_id: chatId,
+            text: `⚠️ Dot coworker "${targetDotName}" not found. Type /dots to view your active roster.`,
+          });
+          return;
+        }
+
+        if (dot.model && dot.model !== "auto") model = dot.model;
+
+        // 1. Persist User Prompt into Dot Workspace messages
+        appendDotMessage(ctx, dot.id, {
+          role: "user",
+          content: prompt || "Hello!",
+        });
+
+        // 2. Load recent conversation history for memory continuity
+        const dotHistory = listDotMessages(ctx, dot.id).slice(-8);
+        const systemPrompt = `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as coworker "${dot.name}" (${dot.role}). Working environment: "${dot.workingDirectory}". Enabled tools: ${dot.tools.join(", ")}. Provide concise, high-value responses over Telegram.`;
+
+        const messages: UnifiedMessage[] = [
+          { role: "system", content: systemPrompt },
+          ...dotHistory.slice(0, -1).map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+          { role: "user", content: prompt || "Hello!" },
+        ];
+
+        // 3. Run Agent loop
+        const result = await runAgentTurn({
+          db,
+          key,
+          client,
+          model,
+          initialMessages: messages,
+          maxSteps: 8,
+          providerTimeoutMs: 90_000,
+          autoApproveTools: false,
+          onDelta: () => {},
+          onStep: () => {},
+          onApprovalRequest: () => {},
+          appendAssistant: () => {},
+          appendTool: () => {},
+        });
+
+        const replyText = result.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim() || "Done.";
+
+        // 4. Persist Dot Response so localhost:3000/dots displays it live
+        appendDotMessage(ctx, dot.id, {
+          role: "assistant",
+          content: replyText,
+        });
+
+        // 5. Send Telegram reply
+        await callTelegramApi(botToken, "sendMessage", {
+          chat_id: chatId,
+          text: formatMarkdownTablesForMobile(`🤖 *[${dot.name}]*\n\n${replyText}`),
+          parse_mode: "Markdown",
+        });
+        return;
+      }
+
+      // -------------------------------------------------------------
+      // PATH B: General K9 Assistant (Synced to Live Chat Sessions)
+      // -------------------------------------------------------------
+      // Look for active session mapped to this Telegram chat
+      const kvKey = `tg_session_${chatId}`;
+      const kvRow = db.prepare("SELECT value FROM kv WHERE key = ?").get(kvKey) as { value: string } | undefined;
+      let sessionId = kvRow?.value;
+      let sessionValid = false;
+
+      if (sessionId) {
+        try {
+          const existing = getSession(ctx, sessionId);
+          if (existing) sessionValid = true;
+        } catch {
+          sessionValid = false;
         }
       }
 
+      if (!sessionValid) {
+        const cleanSnippet = prompt.trim().slice(0, 28).replace(/[\r\n]+/g, " ");
+        const title = `📱 Telegram: ${cleanSnippet || "Live Chat"}`;
+        const newSession = createSession(ctx, {
+          title,
+          model,
+          providerId: provider.id,
+        });
+        sessionId = newSession.id;
+        db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)").run(kvKey, sessionId);
+      }
+
+      // 1. Persist User Message into Chat Session
+      appendMessage(ctx, sessionId!, {
+        role: "user",
+        content: prompt || "Hello!",
+      });
+
+      // 2. Load recent session history for context
+      const sessionHistory = listMessages(ctx, sessionId!).slice(-8);
+      const systemPrompt = "You are Phryvos-K9, a helpful and secure personal assistant.";
+
       const messages: UnifiedMessage[] = [
         { role: "system", content: systemPrompt },
+        ...sessionHistory.slice(0, -1).map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+        })),
         { role: "user", content: prompt || "Hello!" },
       ];
 
+      // 3. Run Agent loop
       const result = await runAgentTurn({
         db,
         key,
         client,
         model,
         initialMessages: messages,
-        maxSteps: 6,
+        maxSteps: 8,
         providerTimeoutMs: 90_000,
         autoApproveTools: false,
         onDelta: () => {},
@@ -729,8 +845,15 @@ export class TelegramGatewayService {
         appendTool: () => {},
       });
 
-      // Send response back to Telegram
       const replyText = result.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim() || "Done.";
+
+      // 4. Persist Assistant Message into Chat Session so localhost:3000/chat updates live
+      appendMessage(ctx, sessionId!, {
+        role: "assistant",
+        content: replyText,
+      });
+
+      // 5. Send Telegram reply
       await callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: formatMarkdownTablesForMobile(replyText),

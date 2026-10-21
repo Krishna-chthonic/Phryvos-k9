@@ -22,6 +22,7 @@ import { PluginManagerPanel } from "@/components/settings/PluginManagerPanel";
 import { DigUpPanel } from "@/components/settings/DigUpPanel";
 import { IFixAiPanel } from "@/components/settings/IFixAiPanel";
 import { EccRulesPanel } from "@/components/settings/EccRulesPanel";
+import { HermesSynthesisPanel } from "@/components/settings/HermesSynthesisPanel";
 import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -49,6 +50,7 @@ export default function SettingsPage() {
         <DigUpPanel />
         <IFixAiPanel />
         <EccRulesPanel />
+        <HermesSynthesisPanel />
         <FreeModelsPanel />
         <ProvidersPanel />
         <SystemPromptPanel />

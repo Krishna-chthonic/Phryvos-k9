@@ -99,6 +99,7 @@ import {
 import { paperclipEngine } from "@/lib/paperclip/paperclip-engine";
 import { ifixaiEngine } from "@/lib/audit/ifixai-engine";
 import { eccEngine, type RuleCategory } from "@/lib/ecc/ecc-engine";
+import { hermesEngine } from "@/lib/hermes/hermes-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1722,6 +1723,72 @@ function toolEccGetContract(_ctx: VaultCtx, a: { phase?: "plan" | "implement" | 
     return `${contract.title}:\n` + contract.systemRules.map((r, i) => `${i + 1}. ${r}`).join("\n");
   } catch (err) {
     return `ECC contract error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- hermes (dynamic tool synthesis & reflection)
+
+async function toolHermesSynthesizeTool(
+  ctx: VaultCtx,
+  a: {
+    name: string;
+    description: string;
+    code: string;
+    parameters?: Array<{ name: string; type: "string" | "number" | "boolean"; description: string; required?: boolean }>;
+  },
+) {
+  try {
+    const res = await hermesEngine.synthesizeTool(
+      {
+        name: a.name,
+        description: a.description,
+        code: a.code,
+        parameters: (a.parameters || []).map((p) => ({
+          name: p.name,
+          type: p.type,
+          description: p.description,
+          required: p.required ?? true,
+        })),
+      },
+      ctx,
+    );
+    if (!res.success) return `Hermes tool synthesis failed: ${res.error}`;
+    return `Synthesized new dynamic tool [${res.tool?.name}]. Test output: ${res.testOutput}. Tool registered and saved to vault.`;
+  } catch (err) {
+    return `Hermes synthesize error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolHermesListSynthesizedTools(_ctx: VaultCtx) {
+  try {
+    const tools = hermesEngine.listSynthesizedTools();
+    if (tools.length === 0) return "No dynamic tools synthesized yet.";
+    return `Synthesized Dynamic Tools (${tools.length}):\n` + tools.map((t) => `• [${t.name}] ${t.description} (params: ${t.parameters.map((p) => p.name).join(", ") || "none"}) - Executed ${t.executionCount} time(s)`).join("\n");
+  } catch (err) {
+    return `Hermes list tools error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolHermesReflectTurn(_ctx: VaultCtx, a: { taskGoal: string; steps?: Array<{ tool: string; resultSnippet: string; success: boolean }> }) {
+  try {
+    const res = hermesEngine.runReflection(a.taskGoal, a.steps || []);
+    return `Hermes Reflection:
+• Alignment Score: ${res.alignmentScore}%
+• Efficiency Score: ${res.efficiencyScore}%
+• Summary: ${res.reflectionSummary}
+• Strengths: ${res.strengths.join("; ")}
+• Recommended Lesson: ${res.recommendedRules.join("; ")}`;
+  } catch (err) {
+    return `Hermes reflection error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolHermesExportTrajectory(ctx: VaultCtx, a: { sessionId?: string }) {
+  try {
+    const res = hermesEngine.exportTrajectory(ctx, a.sessionId);
+    return `Exported trajectory (${res.stepCount} steps) to encrypted vault: ${res.filePath}`;
+  } catch (err) {
+    return `Hermes trajectory export error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3512,6 +3579,82 @@ export function ensureAgentTools(): void {
     false,
     z.object({
       phase: z.enum(["plan", "implement", "verify"]).optional(),
+    }),
+  );
+
+  // ---------------------------------------------------------------- hermes tools
+
+  reg(
+    "hermes_synthesize_tool",
+    "Autonomously synthesize a new executable JavaScript tool on the fly, validate its execution, and register it permanently into the active tool suite.",
+    P(
+      "hermes_synthesize_tool",
+      "Synthesize dynamic tool on the fly",
+      {
+        name: { type: "string", description: "Tool function name (letters, numbers, underscore)" },
+        description: { type: "string", description: "What the tool does" },
+        code: { type: "string", description: "JavaScript function body returning the result" },
+      },
+      { parameters: { type: "array", description: "List of parameter descriptors ({ name, type, description, required })" } },
+    ),
+    (c, a) => toolHermesSynthesizeTool(c, a),
+    false,
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      code: z.string(),
+      parameters: z.array(z.object({
+        name: z.string(),
+        type: z.enum(["string", "number", "boolean"]),
+        description: z.string(),
+        required: z.boolean().optional(),
+      })).optional(),
+    }),
+  );
+
+  reg(
+    "hermes_list_synthesized_tools",
+    "List all dynamically synthesized tools currently compiled and available in the Hermes skill mesh.",
+    P("hermes_list_synthesized_tools", "List synthesized dynamic tools", {}),
+    (c) => toolHermesListSynthesizedTools(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "hermes_reflect_turn",
+    "Perform a multi-turn reflection analysis on recent agent execution to compute goal alignment, efficiency scores, and continuous improvement takeaways.",
+    P(
+      "hermes_reflect_turn",
+      "Perform multi-turn reflection",
+      { taskGoal: { type: "string", description: "Target objective or user request" } },
+      { steps: { type: "array", description: "List of tool execution steps" } },
+    ),
+    (c, a) => toolHermesReflectTurn(c, a),
+    false,
+    z.object({
+      taskGoal: z.string(),
+      steps: z.array(z.object({
+        tool: z.string(),
+        resultSnippet: z.string(),
+        success: z.boolean(),
+      })).optional(),
+    }),
+  );
+
+  reg(
+    "hermes_export_trajectory",
+    "Export current session interaction trajectory into JSON Lines format stored permanently in the encrypted vault.",
+    P(
+      "hermes_export_trajectory",
+      "Export session trajectory to vault",
+      {},
+      { sessionId: { type: "string", description: "Custom session ID" } },
+    ),
+    (c, a) => toolHermesExportTrajectory(c, a),
+    false,
+    z.object({
+      sessionId: z.string().optional(),
     }),
   );
 }

@@ -69,6 +69,11 @@ import {
   removeDotWorktree,
 } from "@/lib/dots/worktree-service";
 import { synthesizeSkill } from "./skill-synthesizer";
+import {
+  storeReMeMemory,
+  recallReMeMemories,
+  runReMeDreamCycle,
+} from "@/lib/memory/reme-service";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1030,6 +1035,69 @@ async function toolManageWorktree(
   }
 }
 
+// ---------------------------------------------------------------- ReMe Memory (QwenPaw)
+
+async function toolReMeStore(
+  ctx: VaultCtx,
+  a: {
+    title: string;
+    content: string;
+    category?: string;
+    tags?: string[];
+    relatedTopics?: string[];
+    confidence?: number;
+  },
+) {
+  try {
+    const doc = await storeReMeMemory(ctx, a);
+    return JSON.stringify({
+      success: true,
+      message: `Memory stored permanently in ReMe vault`,
+      vaultPath: doc.vaultPath,
+      title: doc.title,
+      wikilinks: doc.wikilinks,
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReMeRecall(
+  ctx: VaultCtx,
+  a: { query: string; limit?: number },
+) {
+  try {
+    const results = await recallReMeMemories(ctx, a.query, a.limit || 5);
+    return JSON.stringify({
+      count: results.length,
+      results: results.map((r) => ({
+        title: r.title,
+        category: r.category,
+        path: r.vaultPath,
+        score: r.score,
+        wikilinks: r.wikilinks,
+        snippet: r.content.slice(0, 300),
+      })),
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReMeDream(ctx: VaultCtx) {
+  try {
+    const result = await runReMeDreamCycle(ctx);
+    return JSON.stringify({
+      success: true,
+      message: `ReMe Auto-Dream consolidation cycle complete`,
+      consolidatedCount: result.consolidated,
+      newFiles: result.newFiles,
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -1918,6 +1986,67 @@ export function ensureAgentTools(): void {
       exampleUsage: z.string().optional(),
       authorDot: z.string().optional(),
     }),
+  );
+
+  // ---------------------------------------------------------------- ReMe Three-Layer File-as-Memory (QwenPaw)
+
+  reg(
+    "reme_store",
+    "Store a durable human-readable memory file in the vault (/memories/<category>/<slug>.md) with YAML frontmatter and [[wikilinks]]. Use this when the user asks you to permanently remember important concepts, user preferences, project context, or architectural decisions.",
+    P(
+      "reme_store",
+      "Store permanent ReMe Markdown memory doc",
+      {
+        title: { type: "string", description: "Clear, concise title for this memory (used as slug and heading)" },
+        content: { type: "string", description: "Detailed memory body text. Can contain [[wikilinks]] to other memories or concepts." },
+      },
+      {
+        category: { type: "string", description: "Category folder, e.g. 'preferences', 'projects', 'rules', 'facts' (default: 'general')" },
+        tags: { type: "array", items: { type: "string" }, description: "Search tags for discovery" },
+        relatedTopics: { type: "array", items: { type: "string" }, description: "Related topics to cross-link via [[wikilinks]]" },
+        confidence: { type: "number", description: "Confidence score between 0.0 and 1.0 (default 1.0)" },
+      },
+    ),
+    (c, a) => toolReMeStore(c, a),
+    false,
+    z.object({
+      title: z.string(),
+      content: z.string(),
+      category: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      relatedTopics: z.array(z.string()).optional(),
+      confidence: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "reme_recall",
+    "Recall relevant memories from the vault using Hybrid RRF (BM25 keyword search + semantic embeddings + [[wikilink]] graph expansion). Returns high-confidence structured knowledge.",
+    P(
+      "reme_recall",
+      "Hybrid RRF memory retrieval",
+      {
+        query: { type: "string", description: "Search query or natural language question" },
+      },
+      {
+        limit: { type: "number", description: "Max results to return (default 5)" },
+      },
+    ),
+    (c, a) => toolReMeRecall(c, a),
+    false,
+    z.object({
+      query: z.string(),
+      limit: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "reme_dream",
+    "Trigger the ReMe Auto-Dream Consolidation Cycle. Analyzes recently accessed short-term memories and consolidates them into permanent Markdown files in /memories/ with wikilinks.",
+    P("reme_dream", "Consolidate STM to durable ReMe Markdown files", {}),
+    (c) => toolReMeDream(c),
+    false,
+    z.object({}),
   );
 }
 

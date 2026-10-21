@@ -23,6 +23,7 @@ import { runAgentTurn } from "./agent/loop";
 import { ensureAgentTools } from "./agent/tools";
 import { enhancePromptWithEcc } from "./ai/prompts/ecc-instincts";
 import { telegramGateway } from "./gateway/telegram-gateway";
+import { runReMeDreamCycle } from "./memory/reme-service";
 import type { UnifiedMessage } from "./ai/types";
 
 type GlobalRunner = { __phryvosDotRunner?: DotRunner };
@@ -32,6 +33,7 @@ export class DotRunner {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private currentTaskId: string | null = null;
+  private ticksSinceLastDream = 0;
 
   private constructor() {}
 
@@ -70,7 +72,19 @@ export class DotRunner {
 
       const db = getDb();
       const claim = claimDueDotTask(db);
-      if (!claim) return;
+      if (!claim) {
+        // Idle pass: periodically check if memories need auto-dream consolidation
+        this.ticksSinceLastDream++;
+        if (this.ticksSinceLastDream >= 30) {
+          this.ticksSinceLastDream = 0;
+          try {
+            await runReMeDreamCycle({ db, key: masterKey });
+          } catch (dreamErr) {
+            console.error("[DotRunner] Auto-dream cycle error:", dreamErr);
+          }
+        }
+        return;
+      }
 
       this.running = true;
       this.currentTaskId = claim.task.id;

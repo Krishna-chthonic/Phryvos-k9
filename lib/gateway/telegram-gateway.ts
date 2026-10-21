@@ -19,6 +19,11 @@ import { ensureAgentTools } from "@/lib/agent/tools";
 import { enhancePromptWithEcc } from "@/lib/ai/prompts/ecc-instincts";
 import { listWorktrees, getDotWorktreeInfo } from "@/lib/dots/worktree-service";
 import { addMemory, listMemories } from "@/lib/memory-service";
+import {
+  storeReMeMemory,
+  runReMeDreamCycle,
+  formatMarkdownTablesForMobile,
+} from "@/lib/memory/reme-service";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
 export interface GatewayConfig {
@@ -445,9 +450,32 @@ export class TelegramGatewayService {
         return;
       }
       addMemory(db, fact);
+      const title = fact.length <= 35 ? fact : `${fact.slice(0, 30)}...`;
+      const remeDoc = await storeReMeMemory(ctx, {
+        title,
+        content: fact,
+        category: "telegram",
+        tags: ["telegram", "quick-note"],
+        source: `telegram:${chatId}`,
+      });
+
       await callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
-        text: `🧠 *Memory Saved Permanently to Encrypted Vault:*\n\n"${fact}"`,
+        text: `🧠 *Memory Saved (ReMe 3-Layer Format):*\n\n"${fact}"\n\n_Encrypted File: ${remeDoc.vaultPath}_`,
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+    // /dream (QwenPaw auto-dream memory consolidation)
+    if (rawText === "/dream") {
+      const dreamRes = await runReMeDreamCycle(ctx);
+      const filesMsg = dreamRes.newFiles.length
+        ? `\n\n*Synthesized Knowledge Docs:*\n${dreamRes.newFiles.map((f) => `• \`${f}\``).join("\n")}`
+        : "";
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `🌙 *ReMe Dream Cycle Completed*\n\n• Consolidated Facts: ${dreamRes.consolidated}\n• New Vault Docs: ${dreamRes.newFiles.length}${filesMsg}`,
         parse_mode: "Markdown",
       });
       return;
@@ -520,7 +548,7 @@ export class TelegramGatewayService {
       const replyText = result.text.replace(/<think>[\s\S]*?<\/think>/g, "").trim() || "Done.";
       await callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
-        text: replyText,
+        text: formatMarkdownTablesForMobile(replyText),
       });
     } catch (err) {
       await callTelegramApi(botToken, "sendMessage", {

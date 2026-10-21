@@ -13,10 +13,12 @@ import {
   PanelLeft,
   Menu,
   ArrowLeft,
+  Clock,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
 import { DotSpacesPanel } from "./DotSpacesPanel";
+import { DotTasksPanel } from "./DotTasksPanel";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
@@ -61,7 +63,7 @@ export function DotWorkspace({
   onSelectProvider,
   onSelectModel,
 }: DotWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "computer" | "spaces" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "computer" | "spaces" | "settings">("chat");
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -196,6 +198,17 @@ export function DotWorkspace({
             >
               <MessageSquare className="h-3.5 w-3.5" />
               <span className="hidden md:inline">Chat</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+                activeTab === "tasks"
+                  ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5 text-emerald-500" />
+              <span className="hidden md:inline">Tasks</span>
             </button>
             <button
               onClick={() => setActiveTab("computer")}
@@ -368,6 +381,8 @@ export function DotWorkspace({
             </div>
           </div>
         )}
+
+        {activeTab === "tasks" && <DotTasksPanel dot={dot} onRefreshMessages={onRefreshSpaces} />}
 
         {activeTab === "computer" && <DotComputerPanel dot={dot} />}
 

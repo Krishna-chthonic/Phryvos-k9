@@ -106,6 +106,22 @@ export function runMigrations(db: Database.Database): void {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_dot_spaces_dot ON dot_spaces(dot_id);
+    CREATE TABLE IF NOT EXISTS dot_tasks (
+      id TEXT PRIMARY KEY,
+      dot_id TEXT NOT NULL REFERENCES dots(id) ON DELETE CASCADE,
+      prompt TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued',
+      interval_seconds INTEGER,
+      next_run_at INTEGER,
+      last_run_at INTEGER,
+      last_result TEXT,
+      error TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_dot_tasks_dot ON dot_tasks(dot_id);
+    CREATE INDEX IF NOT EXISTS idx_dot_tasks_status ON dot_tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_dot_tasks_next_run ON dot_tasks(next_run_at);
     CREATE TABLE IF NOT EXISTS schema_versions (
       version INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -182,6 +198,58 @@ export function runMigrations(db: Database.Database): void {
       JSON.stringify(["vault", "web_search", "python_runner"]),
       "idle",
       "/vault/study",
+      now,
+      now
+    );
+  }
+
+  // Seed default autonomous standing tasks if dot_tasks table is empty
+  const taskCount = (db.prepare("SELECT COUNT(*) as count FROM dot_tasks").get() as { count: number }).count;
+  if (taskCount === 0) {
+    const now = Date.now();
+    const insertTask = db.prepare(`
+      INSERT INTO dot_tasks (id, dot_id, prompt, status, interval_seconds, next_run_at, last_run_at, last_result, error, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insertTask.run(
+      "task_neo_health",
+      "neo",
+      "Inspect repository git status, check uncommitted changes, and verify project build health.",
+      "queued",
+      7200, // Every 2 hours
+      now + 7200000,
+      null,
+      null,
+      null,
+      now,
+      now
+    );
+
+    insertTask.run(
+      "task_nova_research",
+      "nova",
+      "Search the web for major open-source AI and software developments from the past 24 hours, and draft a brief summary.",
+      "queued",
+      86400, // Daily (every 24 hours)
+      now + 86400000,
+      null,
+      null,
+      null,
+      now,
+      now
+    );
+
+    insertTask.run(
+      "task_atlas_tasks",
+      "atlas",
+      "Review upcoming vault tasks, check deadlines, and summarize daily priorities.",
+      "queued",
+      21600, // Every 6 hours
+      now + 21600000,
+      null,
+      null,
+      null,
       now,
       now
     );

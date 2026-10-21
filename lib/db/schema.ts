@@ -411,3 +411,25 @@ export const dotSpaces = sqliteTable(
   (t) => [index("idx_dot_spaces_dot").on(t.dotId)],
 );
 
+export const dotTasks = sqliteTable(
+  "dot_tasks",
+  {
+    id: text("id").primaryKey(),
+    dotId: text("dot_id").notNull().references(() => dots.id, { onDelete: "cascade" }),
+    prompt: text("prompt").notNull(),
+    status: text("status").notNull().default("queued"), // "queued" | "running" | "completed" | "failed" | "paused"
+    intervalSeconds: integer("interval_seconds"), // null = one-off, or repeat interval in seconds
+    nextRunAt: integer("next_run_at"),
+    lastRunAt: integer("last_run_at"),
+    lastResult: text("last_result"),
+    error: text("error"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_dot_tasks_dot").on(t.dotId),
+    index("idx_dot_tasks_status").on(t.status),
+    index("idx_dot_tasks_next_run").on(t.nextRunAt),
+  ],
+);
+

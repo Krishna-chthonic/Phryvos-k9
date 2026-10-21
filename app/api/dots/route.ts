@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
 import { listDots, createDot } from "@/lib/dots-service";
+import { dotRunner } from "@/lib/dots-runner";
 
 export async function GET() {
   try {
     const ctx = await requireVault();
+    dotRunner.start();
     const dots = listDots(ctx);
     return Response.json({ dots });
   } catch (e) {

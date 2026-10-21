@@ -1,4 +1,5 @@
 import type { VaultCtx } from "@/lib/providers-service";
+import type Database from "better-sqlite3";
 import crypto from "node:crypto";
 
 export interface DotDto {
@@ -33,6 +34,20 @@ export interface DotSpaceDto {
   dotId: string;
   title: string;
   content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DotTaskDto {
+  id: string;
+  dotId: string;
+  prompt: string;
+  status: "queued" | "running" | "completed" | "failed" | "paused";
+  intervalSeconds: number | null;
+  nextRunAt: number | null;
+  lastRunAt: number | null;
+  lastResult: string | null;
+  error: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -340,6 +355,191 @@ export function saveDotSpace(
 export function deleteDotSpace(ctx: VaultCtx, spaceId: string): boolean {
   ctx.db.prepare("DELETE FROM dot_spaces WHERE id = ?").run(spaceId);
   return true;
+}
+
+interface RawDotTaskRow {
+  id: string;
+  dot_id: string;
+  prompt: string;
+  status: string;
+  interval_seconds: number | null;
+  next_run_at: number | null;
+  last_run_at: number | null;
+  last_result: string | null;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function toTaskDto(r: RawDotTaskRow): DotTaskDto {
+  return {
+    id: r.id,
+    dotId: r.dot_id,
+    prompt: r.prompt,
+    status: r.status as DotTaskDto["status"],
+    intervalSeconds: r.interval_seconds,
+    nextRunAt: r.next_run_at,
+    lastRunAt: r.last_run_at,
+    lastResult: r.last_result,
+    error: r.error,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+export function listDotTasks(ctx: VaultCtx, dotId: string): DotTaskDto[] {
+  const stmt = ctx.db.prepare("SELECT * FROM dot_tasks WHERE dot_id = ? ORDER BY created_at DESC");
+  const rows = stmt.all(dotId) as RawDotTaskRow[];
+  return rows.map(toTaskDto);
+}
+
+export function getDotTask(ctx: VaultCtx, taskId: string): DotTaskDto | null {
+  const row = ctx.db.prepare("SELECT * FROM dot_tasks WHERE id = ?").get(taskId) as RawDotTaskRow | undefined;
+  return row ? toTaskDto(row) : null;
+}
+
+export function createDotTask(
+  ctx: VaultCtx,
+  dotId: string,
+  input: {
+    prompt: string;
+    intervalSeconds?: number | null;
+    nextRunAt?: number | null;
+  }
+): DotTaskDto {
+  const now = Date.now();
+  const id = `task_${crypto.randomUUID().slice(0, 8)}`;
+  const nextRunAt = input.nextRunAt ?? (input.intervalSeconds ? now + input.intervalSeconds * 1000 : now);
+
+  ctx.db
+    .prepare(`
+      INSERT INTO dot_tasks (id, dot_id, prompt, status, interval_seconds, next_run_at, last_run_at, last_result, error, created_at, updated_at)
+      VALUES (?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, ?, ?)
+    `)
+    .run(id, dotId, input.prompt.trim(), input.intervalSeconds ?? null, nextRunAt, now, now);
+
+  return {
+    id,
+    dotId,
+    prompt: input.prompt.trim(),
+    status: "queued",
+    intervalSeconds: input.intervalSeconds ?? null,
+    nextRunAt,
+    lastRunAt: null,
+    lastResult: null,
+    error: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function updateDotTask(
+  ctx: VaultCtx,
+  taskId: string,
+  patch: Partial<DotTaskDto>
+): DotTaskDto | null {
+  const existing = getDotTask(ctx, taskId);
+  if (!existing) return null;
+
+  const now = Date.now();
+  const next = { ...existing, ...patch, updatedAt: now };
+
+  ctx.db
+    .prepare(`
+      UPDATE dot_tasks
+      SET prompt = ?, status = ?, interval_seconds = ?, next_run_at = ?, last_run_at = ?, last_result = ?, error = ?, updated_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      next.prompt,
+      next.status,
+      next.intervalSeconds ?? null,
+      next.nextRunAt ?? null,
+      next.lastRunAt ?? null,
+      next.lastResult ?? null,
+      next.error ?? null,
+      now,
+      taskId
+    );
+
+  return next;
+}
+
+export function deleteDotTask(ctx: VaultCtx, taskId: string): boolean {
+  ctx.db.prepare("DELETE FROM dot_tasks WHERE id = ?").run(taskId);
+  return true;
+}
+
+/**
+ * Claim due background task atomically.
+ */
+export function claimDueDotTask(db: Database.Database): { task: DotTaskDto; dot: DotDto } | null {
+  const now = Date.now();
+  const row = db
+    .prepare(`
+      SELECT * FROM dot_tasks
+      WHERE status NOT IN ('paused', 'running') AND next_run_at IS NOT NULL AND next_run_at <= ?
+      ORDER BY next_run_at ASC
+      LIMIT 1
+    `)
+    .get(now) as RawDotTaskRow | undefined;
+
+  if (!row) return null;
+
+  // Mark running atomically
+  db.prepare("UPDATE dot_tasks SET status = 'running', updated_at = ? WHERE id = ?").run(now, row.id);
+
+  const dotRow = db.prepare("SELECT * FROM dots WHERE id = ?").get(row.dot_id) as RawDotRow | undefined;
+  if (!dotRow) return null;
+
+  const dot: DotDto = {
+    id: dotRow.id,
+    name: dotRow.name,
+    character: dotRow.character as DotDto["character"],
+    role: dotRow.role,
+    description: dotRow.description,
+    systemPrompt: dotRow.system_prompt,
+    model: dotRow.model || "auto",
+    tools: safeParseJson(dotRow.tools, []),
+    status: dotRow.status as DotDto["status"],
+    workingDirectory: dotRow.working_directory || process.cwd(),
+    createdAt: dotRow.created_at,
+    updatedAt: dotRow.updated_at,
+  };
+
+  return { task: toTaskDto({ ...row, status: "running" }), dot };
+}
+
+/**
+ * Complete background task and schedule next occurrence if repeating.
+ */
+export function completeDotTask(
+  db: Database.Database,
+  taskId: string,
+  outcome: { resultText?: string; error?: string }
+): void {
+  const now = Date.now();
+  const row = db.prepare("SELECT * FROM dot_tasks WHERE id = ?").get(taskId) as RawDotTaskRow | undefined;
+  if (!row) return;
+
+  if (outcome.error) {
+    db.prepare(`
+      UPDATE dot_tasks
+      SET status = 'failed', error = ?, last_run_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(outcome.error, now, now, taskId);
+    return;
+  }
+
+  const interval = row.interval_seconds;
+  const nextRunAt = interval && interval > 0 ? now + interval * 1000 : null;
+  const nextStatus = interval && interval > 0 ? "queued" : "completed";
+
+  db.prepare(`
+    UPDATE dot_tasks
+    SET status = ?, next_run_at = ?, last_run_at = ?, last_result = ?, error = NULL, updated_at = ?
+    WHERE id = ?
+  `).run(nextStatus, nextRunAt, now, outcome.resultText ?? null, now, taskId);
 }
 
 function safeParseJson<T>(raw: string | null | undefined, fallback: T): T {

@@ -57,6 +57,16 @@ export function touchSession(token: string, ttlMs: number): void {
   if (entry) entry.expiresAt = Date.now() + ttlMs;
 }
 
+/** Retrieve active decrypted master key for background worker loops when unlocked. */
+export function getActiveMasterKey(): Buffer | null {
+  const now = Date.now();
+  for (const [k, v] of store()) {
+    if (now < v.expiresAt) return v.masterKey;
+    store().delete(k);
+  }
+  return null;
+}
+
 export function destroySession(token: string | null | undefined): void {
   if (token) store().delete(token);
 }

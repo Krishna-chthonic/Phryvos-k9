@@ -12,9 +12,14 @@ import {
   Terminal,
   PanelLeft,
   Menu,
-  ArrowLeft,
   Clock,
   ScrollText,
+  Layers,
+  X,
+  ChevronDown,
+  Check,
+  Bot,
+  Users,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
@@ -48,6 +53,97 @@ interface DotWorkspaceProps {
   onSelectModel: (m: string) => void;
 }
 
+export type WorkspaceTabId =
+  | "chat"
+  | "tasks"
+  | "computer"
+  | "spaces"
+  | "recipes"
+  | "swarm"
+  | "paperclip"
+  | "settings";
+
+interface ModuleConfig {
+  id: WorkspaceTabId;
+  label: string;
+  shortLabel: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconColor: string;
+  badge?: string;
+  pulse?: boolean;
+}
+
+const MODULES: ModuleConfig[] = [
+  {
+    id: "chat",
+    label: "Direct Chat",
+    shortLabel: "Chat",
+    description: "Live conversation, memory injection & audio calls with Dot",
+    icon: MessageSquare,
+    iconColor: "text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800",
+  },
+  {
+    id: "tasks",
+    label: "Autonomous Tasks",
+    shortLabel: "Tasks",
+    description: "Cron-like scheduled heartbeats and recurring agent workflows",
+    icon: Clock,
+    iconColor: "text-amber-500 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
+    pulse: true,
+  },
+  {
+    id: "computer",
+    label: "Termux Computer",
+    shortLabel: "Computer",
+    description: "Native Linux shell execution, OpenClaw tools & browser actions",
+    icon: Monitor,
+    iconColor: "text-blue-500 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",
+    badge: "CLI",
+  },
+  {
+    id: "spaces",
+    label: "Knowledge Spaces",
+    shortLabel: "Spaces",
+    description: "Document storage, knowledge bases & shared agent context",
+    icon: BookOpen,
+    iconColor: "text-purple-500 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800",
+  },
+  {
+    id: "recipes",
+    label: "Goose Automation Recipes",
+    shortLabel: "Recipes",
+    description: "Multi-step agent playbooks and automated recipe runners",
+    icon: ScrollText,
+    iconColor: "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
+  },
+  {
+    id: "swarm",
+    label: "Ruflo Swarm Coordinator",
+    shortLabel: "Swarm",
+    description: "Hierarchical multi-agent delegation & parallel swarm tasking",
+    icon: Bot,
+    iconColor: "text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800",
+    badge: "16-Repo",
+  },
+  {
+    id: "paperclip",
+    label: "Paperclip Org & Cost",
+    shortLabel: "Org & Cost",
+    description: "Virtual AI organization hierarchy, token quotas & budget tracker",
+    icon: Users,
+    iconColor: "text-cyan-500 bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800",
+  },
+  {
+    id: "settings",
+    label: "Dot Instructions & Persona",
+    shortLabel: "Settings",
+    description: "Customize system directives, working directory & tool allowances",
+    icon: Settings2,
+    iconColor: "text-zinc-600 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700",
+  },
+];
+
 export function DotWorkspace({
   dot,
   messages,
@@ -67,7 +163,8 @@ export function DotWorkspace({
   onSelectProvider,
   onSelectModel,
 }: DotWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "recipes" | "swarm" | "paperclip" | "computer" | "spaces" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<WorkspaceTabId>("chat");
+  const [modulesDrawerOpen, setModulesDrawerOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -86,57 +183,72 @@ export function DotWorkspace({
 
   const handleAskDotToReview = (docTitle: string, docContent: string) => {
     setActiveTab("chat");
-    onSendMessage(`Please review this document titled "${docTitle}":\n\n\`\`\`markdown\n${docContent}\n\`\`\`\n\nProvide constructive feedback, identify potential gaps, and suggest concrete enhancements.`);
+    onSendMessage(
+      `Please review this document titled "${docTitle}":\n\n\`\`\`markdown\n${docContent}\n\`\`\`\n\nProvide constructive feedback, identify potential gaps, and suggest concrete enhancements.`
+    );
   };
 
   const currentProv = providers.find((p) => p.id === providerId) ?? providers[0];
   const modelOptions = currentProv?.models ?? [];
+  const currentModule = MODULES.find((m) => m.id === activeTab) || MODULES[0];
+  const CurrentIcon = currentModule.icon;
 
   return (
     <div className="flex flex-1 flex-col h-full min-w-0 overflow-hidden bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-      {/* Unified Single Top Bar */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-2 sm:px-3 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-sm gap-1.5 sm:gap-2">
-        {/* Left: Navigation controls + Dot Identity */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
-          {/* Mobile Main Menu trigger */}
+      {/* Unified Non-Overflowing Single Top Bar */}
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-2 sm:px-3 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md gap-1.5 sm:gap-2 z-10">
+        {/* Left: 3 Slide Triggers (Main Menu, Coworkers, Workspace Modules) + Dot Identity */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
+          {/* Slide Option 1: Mobile Main App Menu */}
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("phryvos:open-menu"))}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0 cursor-pointer"
-            title="Open Main Navigation Menu"
+            title="Slide 1: Open Main Navigation Menu"
             aria-label="Open Navigation Menu"
           >
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Mobile Coworkers trigger */}
+          {/* Slide Option 2: Mobile Coworkers Roster */}
           <button
             onClick={onToggleRoster}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0 cursor-pointer"
-            title="Toggle Coworkers Roster"
+            title="Slide 2: Toggle Coworkers Roster"
             aria-label="Toggle Coworkers"
           >
             <PanelLeft className="h-4 w-4" />
           </button>
 
-          {/* Desktop Coworkers toggle button */}
+          {/* Slide Option 2 (Desktop): Coworkers sidebar toggle */}
           <button
             onClick={onToggleDesktopRoster}
-            className="hidden md:flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition shrink-0 cursor-pointer"
-            title="Toggle Coworkers sidebar"
+            className="hidden md:flex h-8 items-center gap-1 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition shrink-0 cursor-pointer"
+            title="Slide 2: Toggle Coworkers sidebar"
           >
-            <PanelLeft className="h-4 w-4" />
+            <PanelLeft className="h-3.5 w-3.5" />
             <span className="hidden lg:inline">{desktopRosterOpen ? "Hide" : "Coworkers"}</span>
           </button>
 
+          {/* Slide Option 3: Dedicated Workspace Modules Drawer Trigger (User Mandate) */}
+          <button
+            onClick={() => setModulesDrawerOpen(true)}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200/80 bg-indigo-50/70 px-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 active:scale-95 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/60 transition shrink-0 cursor-pointer"
+            title="Slide 3: Open Workspace Modules Drawer (Chat, Tasks, Computer, Spaces, Swarm, etc.)"
+            aria-label="Open Workspace Modules"
+          >
+            <Layers className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden xs:inline font-medium">Modules</span>
+          </button>
+
           {/* Dot Mascot & Identity */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <DotMascot character={dot.character} size="small" state={dot.status} className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
-            <div className="min-w-0 hidden xs:block">
+          <div className="flex items-center gap-1.5 min-w-0 pl-1 border-l border-zinc-200 dark:border-zinc-800">
+            <DotMascot character={dot.character} size="small" state={dot.status} className="w-7 h-7 shrink-0" />
+            <div className="min-w-0 hidden sm:block">
               <div className="flex items-center gap-1">
-                <span className="truncate text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                <span className="truncate text-xs font-bold text-zinc-900 dark:text-zinc-100">
                   {dot.name}
                 </span>
-                <span className="hidden sm:inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 capitalize">
+                <span className="hidden md:inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:border-emerald-800/60 dark:text-emerald-300 capitalize">
                   {dot.status}
                 </span>
               </div>
@@ -144,116 +256,18 @@ export function DotWorkspace({
           </div>
         </div>
 
-        {/* Center: Integrated Workspace Tabs (Chat, Tasks, Computer, Spaces, Settings) */}
-        <div className="flex items-center gap-0.5 rounded-xl border border-zinc-200 bg-zinc-100/80 p-0.5 dark:border-zinc-800 dark:bg-zinc-900 overflow-x-auto no-scrollbar shrink-0">
+        {/* Center: Sleek Active Module Trigger Pill (Never Overflows) */}
+        <div className="flex items-center justify-center min-w-0">
           <button
-            onClick={() => setActiveTab("chat")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "chat"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Chat conversation"
+            onClick={() => setModulesDrawerOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200/90 bg-zinc-100/80 px-2.5 py-1 text-xs font-semibold text-zinc-800 hover:bg-zinc-200/70 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 transition active:scale-95 cursor-pointer shadow-2xs"
+            title="Click to switch workspace module"
           >
-            <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />
-            <span>Chat</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("tasks")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "tasks"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Autonomous Scheduled Tasks"
-          >
-            <Clock className="h-3.5 w-3.5 text-amber-500" />
-            <span>Tasks</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          </button>
-
-          <button
-            onClick={() => setActiveTab("computer")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "computer"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Termux Computer / Shell / Tools"
-          >
-            <Monitor className="h-3.5 w-3.5 text-blue-500" />
-            <span className="hidden sm:inline">Computer</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("spaces")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "spaces"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Document Spaces"
-          >
-            <BookOpen className="h-3.5 w-3.5 text-purple-500" />
-            <span className="hidden sm:inline">Spaces</span>
-            {spaces.length > 0 && (
-              <span className="rounded-full bg-zinc-200/80 px-1 text-[9px] font-bold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
-                {spaces.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("recipes")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "recipes"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Goose Automation Recipes"
-          >
-            <ScrollText className="h-3.5 w-3.5 text-amber-500" />
-            <span className="hidden sm:inline">Recipes</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("swarm")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "swarm"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Ruflo Swarm Coordinator"
-          >
-            <span className="text-xs">🐝</span>
-            <span className="hidden sm:inline">Swarm</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("paperclip")}
-            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "paperclip"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Paperclip Virtual AI Organization & Budgets"
-          >
-            <span className="text-xs">📎</span>
-            <span className="hidden sm:inline">Org & Cost</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`flex items-center gap-1 rounded-lg px-1.5 sm:px-2 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
-              activeTab === "settings"
-                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
-                : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-            title="Dot Instructions & Personality Settings"
-          >
-            <Settings2 className="h-3.5 w-3.5 text-zinc-500" />
-            <span className="hidden md:inline">Settings</span>
+            <CurrentIcon className="h-3.5 w-3.5 text-indigo-500" />
+            <span className="truncate max-w-[90px] xs:max-w-[130px] sm:max-w-none">
+              {currentModule.label}
+            </span>
+            <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
           </button>
         </div>
 
@@ -264,7 +278,7 @@ export function DotWorkspace({
             <select
               value={String(providerId)}
               onChange={(e) => onSelectProvider(e.target.value === "" ? "" : Number(e.target.value))}
-              className="h-8 max-w-[80px] sm:max-w-[105px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer hidden md:block"
+              className="h-8 max-w-[75px] sm:max-w-[95px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer hidden lg:block"
               title="AI Provider"
             >
               <option value="">Provider</option>
@@ -281,7 +295,7 @@ export function DotWorkspace({
             <select
               value={selectedModel || (dot.model !== "auto" ? dot.model : modelOptions[0])}
               onChange={(e) => onSelectModel(e.target.value)}
-              className="h-8 max-w-[85px] xs:max-w-[110px] sm:max-w-[145px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer"
+              className="h-8 max-w-[80px] xs:max-w-[105px] sm:max-w-[135px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none cursor-pointer"
               title="AI Model"
             >
               {modelOptions.map((m) => (
@@ -299,10 +313,120 @@ export function DotWorkspace({
             title={`Voice call with ${dot.name}`}
           >
             <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden lg:inline">Call</span>
+            <span className="hidden sm:inline">Call</span>
           </button>
         </div>
       </div>
+
+      {/* Slide Option 3: Dedicated Modules Slide Drawer */}
+      {modulesDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in-50 duration-200"
+            onClick={() => setModulesDrawerOpen(false)}
+          />
+
+          {/* Slide Drawer Panel */}
+          <div className="relative w-full max-w-sm sm:max-w-md bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-right duration-200">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                    Workspace Modules
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Active Dot: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{dot.name}</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setModulesDrawerOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-300 transition cursor-pointer"
+                title="Close drawer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modules List */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
+              {MODULES.map((mod) => {
+                const Icon = mod.icon;
+                const isSelected = activeTab === mod.id;
+
+                return (
+                  <button
+                    key={mod.id}
+                    onClick={() => {
+                      setActiveTab(mod.id);
+                      setModulesDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-start gap-3 p-3 rounded-2xl border text-left transition-all duration-150 active:scale-[0.99] cursor-pointer ${
+                      isSelected
+                        ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 dark:border-indigo-600 shadow-xs"
+                        : "border-zinc-200/80 bg-zinc-50/50 hover:bg-zinc-100/70 dark:border-zinc-800/80 dark:bg-zinc-900/50 dark:hover:bg-zinc-900"
+                    }`}
+                  >
+                    <div
+                      className={`p-2 rounded-xl border shrink-0 transition-transform ${mod.iconColor}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span
+                          className={`font-semibold text-xs ${
+                            isSelected
+                              ? "text-indigo-600 dark:text-indigo-400"
+                              : "text-zinc-900 dark:text-zinc-100"
+                          }`}
+                        >
+                          {mod.label}
+                        </span>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {mod.id === "spaces" && spaces.length > 0 && (
+                            <span className="rounded-full bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-1.5 py-0.2 text-[9px] font-bold text-purple-700 dark:text-purple-300">
+                              {spaces.length} spaces
+                            </span>
+                          )}
+                          {mod.pulse && (
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                          )}
+                          {mod.badge && (
+                            <span className="rounded-full bg-zinc-200/80 dark:bg-zinc-800 px-1.5 py-0.2 text-[9px] font-semibold text-zinc-700 dark:text-zinc-300">
+                              {mod.badge}
+                            </span>
+                          )}
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2 leading-relaxed">
+                        {mod.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer with quick info */}
+            <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/60 text-center text-[10px] text-zinc-400">
+              Phryvos-K9 Workspace • Slide option 3 for quick navigation
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Body */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
@@ -325,13 +449,17 @@ export function DotWorkspace({
 
                   <div className="mt-6 flex flex-wrap justify-center gap-2">
                     <button
-                      onClick={() => onSendMessage("Give me a brief breakdown of your capabilities and how we can work together.")}
+                      onClick={() =>
+                        onSendMessage("Give me a brief breakdown of your capabilities and how we can work together.")
+                      }
                       className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition cursor-pointer"
                     >
                       💡 Explore capabilities
                     </button>
                     <button
-                      onClick={() => onSendMessage("Inspect your current virtual working directory and show me your environment status.")}
+                      onClick={() =>
+                        onSendMessage("Inspect your current virtual working directory and show me your environment status.")
+                      }
                       className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 transition cursor-pointer"
                     >
                       💻 Inspect virtual environment

@@ -25,6 +25,14 @@ import {
   formatMarkdownTablesForMobile,
 } from "@/lib/memory/reme-service";
 import { listRecipes, executeRecipe } from "@/lib/recipes/recipe-runner";
+import {
+  reachWeb,
+  reachGithub,
+  reachReddit,
+  reachYouTube,
+  reachTweet,
+  runAgentReachDoctor,
+} from "@/lib/agent/reach-service";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
 export interface GatewayConfig {
@@ -388,6 +396,8 @@ export class TelegramGatewayService {
         `• \`/status\` — System status & active dots\n` +
         `• \`/recipes\` — Browse Goose automation workflows\n` +
         `• \`/recipe <id>\` — Execute multi-step automation recipe\n` +
+        `• \`/reach <url>\` — Extract clean web/YT/Reddit/X content\n` +
+        `• \`/doctor\` — Check Agent-Reach channel health\n` +
         `• \`/memorize <fact>\` — Save permanent memory to vault\n\n` +
         `*Specialist Coworkers:*\n${dotList || "• (No dots configured)"}\n\n` +
         `_Tip: Direct messages default to your personal Chat companion._`;
@@ -530,6 +540,67 @@ export class TelegramGatewayService {
         await callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: `❌ Recipe failed: ${recipeErr instanceof Error ? recipeErr.message : String(recipeErr)}`,
+        });
+      }
+      return;
+    }
+
+    // /doctor (Agent-Reach diagnostics)
+    if (rawText === "/doctor") {
+      const doc = await runAgentReachDoctor();
+      const lines = doc.channels.map((c) => {
+        const icon = c.status === "healthy" ? "✔" : c.status === "degraded" ? "⚠️" : "❌";
+        return `${icon} *${c.name}* (\`${c.latencyMs}ms\`)\n  ${c.detail || c.status}`;
+      });
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `🩺 *Agent-Reach Doctor Diagnostics*\n\n${lines.join("\n\n")}`,
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+    // /reach <url>
+    if (rawText.startsWith("/reach ")) {
+      const targetUrl = rawText.substring(7).trim();
+      if (!targetUrl) {
+        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /reach <url>" });
+        return;
+      }
+
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `🌐 *Reaching public web data...*\nAnalyzing source link across Agent-Reach channels...`,
+        parse_mode: "Markdown",
+      });
+
+      try {
+        let content = "";
+        if (targetUrl.includes("youtube.com") || targetUrl.includes("youtu.be")) {
+          const yt = await reachYouTube(targetUrl);
+          content = `🎬 *YouTube:* ${yt.title}\n👤 *Creator:* ${yt.author}\n\n📝 *Transcript:*\n${yt.transcript.slice(0, 3000)}`;
+        } else if (targetUrl.includes("reddit.com") || targetUrl.startsWith("r/")) {
+          const red = await reachReddit(targetUrl);
+          content = `💬 *Reddit (r/${red.subreddit}):* ${red.title}\n⬆ Upvotes: ${red.score}\n\n${red.selftext.slice(0, 800)}\n\n*Top Comments:*\n${red.comments.slice(0, 3).map((c) => `• *${c.author}:* ${c.body.slice(0, 300)}`).join("\n")}`;
+        } else if (targetUrl.includes("twitter.com") || targetUrl.includes("x.com")) {
+          const tw = await reachTweet(targetUrl);
+          content = `🐦 *Tweet from @${tw.authorScreenName} (${tw.authorName}):*\n\n"${tw.text}"\n\n❤️ ${tw.likes} | 🔁 ${tw.retweets} | 💬 ${tw.replies}`;
+        } else if (targetUrl.includes("github.com")) {
+          const gh = await reachGithub(targetUrl);
+          content = `🐙 *GitHub Repo:* ${gh.repo}\n⭐ Stars: ${gh.stars ?? 0}\n\n${(gh.readme || gh.description || "").slice(0, 2500)}`;
+        } else {
+          const web = await reachWeb(targetUrl, 3000);
+          content = `📄 *${web.title}*\nSource: ${web.url} (${web.source})\n\n${web.markdown.slice(0, 3000)}`;
+        }
+
+        await callTelegramApi(botToken, "sendMessage", {
+          chat_id: chatId,
+          text: formatMarkdownTablesForMobile(content),
+        });
+      } catch (reachErr) {
+        await callTelegramApi(botToken, "sendMessage", {
+          chat_id: chatId,
+          text: `❌ Reach failed: ${reachErr instanceof Error ? reachErr.message : String(reachErr)}`,
         });
       }
       return;

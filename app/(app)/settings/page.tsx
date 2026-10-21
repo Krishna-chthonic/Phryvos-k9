@@ -15,6 +15,7 @@ import { MemoryPanel } from "@/components/settings/MemoryPanel";
 import { SyncPanel } from "@/components/settings/SyncPanel";
 import { McpPanel } from "@/components/settings/McpPanel";
 import { TelegramGatewayPanel } from "@/components/settings/TelegramGatewayPanel";
+import { AgentReachPanel } from "@/components/settings/AgentReachPanel";
 import { FreeModelsPanel } from "@/components/settings/FreeModelsPanel";
 import { PluginManagerPanel } from "@/components/settings/PluginManagerPanel";
 import { Settings2 } from "lucide-react";
@@ -35,6 +36,7 @@ export default function SettingsPage() {
 
         <ThemePanel />
         <TelegramGatewayPanel />
+        <AgentReachPanel />
         <MemoryPanel />
         <SyncPanel />
         <McpPanel />

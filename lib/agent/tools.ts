@@ -75,6 +75,15 @@ import {
   runReMeDreamCycle,
 } from "@/lib/memory/reme-service";
 import { listRecipes, executeRecipe } from "@/lib/recipes/recipe-runner";
+import {
+  reachWeb,
+  reachGithub,
+  reachReddit,
+  reachYouTube,
+  reachTweet,
+  reachRss,
+  runAgentReachDoctor,
+} from "./reach-service";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1133,6 +1142,77 @@ async function toolRunRecipe(ctx: VaultCtx, a: { recipeId: string; parameters?: 
   }
 }
 
+// ---------------------------------------------------------------- Agent-Reach (Panniantong/Agent-Reach)
+
+async function toolReachWeb(_ctx: VaultCtx, a: { url: string; maxChars?: number }) {
+  try {
+    const res = await reachWeb(a.url, a.maxChars);
+    return JSON.stringify({
+      title: res.title,
+      url: res.url,
+      source: res.source,
+      contentLength: res.length,
+      markdown: res.markdown,
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachGithub(_ctx: VaultCtx, a: { repo: string }) {
+  try {
+    const res = await reachGithub(a.repo);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachReddit(_ctx: VaultCtx, a: { target: string }) {
+  try {
+    const res = await reachReddit(a.target);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachYouTube(_ctx: VaultCtx, a: { videoIdOrUrl: string }) {
+  try {
+    const res = await reachYouTube(a.videoIdOrUrl);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachTweet(_ctx: VaultCtx, a: { urlOrId: string }) {
+  try {
+    const res = await reachTweet(a.urlOrId);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachRss(_ctx: VaultCtx, a: { feedUrl: string; maxItems?: number }) {
+  try {
+    const res = await reachRss(a.feedUrl, a.maxItems);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolReachDoctor(_ctx: VaultCtx) {
+  try {
+    const res = await runAgentReachDoctor();
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -2114,6 +2194,111 @@ export function ensureAgentTools(): void {
       recipeId: z.string(),
       parameters: z.record(z.string(), z.string()).optional(),
     }),
+  );
+
+  // ---------------------------------------------------------------- Agent-Reach Multi-Channel Web Tools (Panniantong/Agent-Reach)
+
+  reg(
+    "reach_web",
+    "Fetch clean, structured Markdown from any public website URL without ads, popups, or paywall banners (powered by Jina Reader r.jina.ai).",
+    P(
+      "reach_web",
+      "Fetch clean web markdown",
+      { url: { type: "string", description: "Target website URL" } },
+      { maxChars: { type: "number", description: "Max characters to retrieve (default: 20000)" } },
+    ),
+    (c, a) => toolReachWeb(c, a),
+    false,
+    z.object({
+      url: z.string(),
+      maxChars: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "reach_github",
+    "Inspect a public GitHub repository. Retrieves stars, forks, README.md, file tree, and open issues without requiring GitHub API tokens.",
+    P(
+      "reach_github",
+      "Inspect GitHub repository",
+      { repo: { type: "string", description: "Repository in 'owner/repo' format, e.g. 'torvalds/linux'" } },
+    ),
+    (c, a) => toolReachGithub(c, a),
+    false,
+    z.object({
+      repo: z.string(),
+    }),
+  );
+
+  reg(
+    "reach_reddit",
+    "Extract discussions, submissions, and top upvoted community comments from any subreddit or Reddit post URL.",
+    P(
+      "reach_reddit",
+      "Extract Reddit discussion",
+      { target: { type: "string", description: "Subreddit (e.g. 'r/technology') or full Reddit post URL" } },
+    ),
+    (c, a) => toolReachReddit(c, a),
+    false,
+    z.object({
+      target: z.string(),
+    }),
+  );
+
+  reg(
+    "reach_youtube",
+    "Extract video title, creator, metadata, and timed transcript/captions from any YouTube video URL or ID.",
+    P(
+      "reach_youtube",
+      "Extract YouTube transcript",
+      { videoIdOrUrl: { type: "string", description: "YouTube video URL or 11-character video ID" } },
+    ),
+    (c, a) => toolReachYouTube(c, a),
+    false,
+    z.object({
+      videoIdOrUrl: z.string(),
+    }),
+  );
+
+  reg(
+    "reach_tweet",
+    "View public Twitter/X post text, author info, likes, retweets, and media links without requiring a Twitter developer account.",
+    P(
+      "reach_tweet",
+      "View Twitter/X post",
+      { urlOrId: { type: "string", description: "Tweet URL or numeric Tweet ID" } },
+    ),
+    (c, a) => toolReachTweet(c, a),
+    false,
+    z.object({
+      urlOrId: z.string(),
+    }),
+  );
+
+  reg(
+    "reach_rss",
+    "Parse any RSS or Atom news feed to extract latest articles, publication timestamps, links, and snippets.",
+    P(
+      "reach_rss",
+      "Parse RSS/Atom feed",
+      { feedUrl: { type: "string", description: "RSS/Atom feed URL (e.g. 'https://news.ycombinator.com/rss')" } },
+      { maxItems: { type: "number", description: "Max articles to retrieve (default: 6)" } },
+    ),
+    (c, a) => toolReachRss(c, a),
+    false,
+    z.object({
+      feedUrl: z.string(),
+      maxItems: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "reach_doctor",
+    "Run diagnostic connectivity checks across all Agent-Reach web channels (Web, GitHub, Reddit, YouTube, Twitter/X, RSS) and measure latency.",
+    P("reach_doctor", "Agent-Reach Doctor diagnostics", {}),
+    (c) => toolReachDoctor(c),
+    false,
+    z.object({}),
   );
 }
 

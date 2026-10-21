@@ -20,6 +20,8 @@ import {
   Shield,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useUiStore } from "@/stores/ui-store";
 import { authApi } from "@/lib/api/client";
@@ -56,6 +58,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const [locking, setLocking] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+
+  // Restore sidebar collapse state from localStorage
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem("phryvos_sidebar_collapsed");
+      if (stored !== null) {
+        setSidebarCollapsed(stored === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebar = React.useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("phryvos_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Close mobile drawer on route change
+  React.useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Listen for custom trigger events from pages (e.g. ChatApp / Dots mobile menu button)
+  React.useEffect(() => {
+    const handleOpenMenu = () => setMobileMenuOpen(true);
+    const handleToggleSidebar = () => toggleSidebar();
+    window.addEventListener("phryvos:open-menu", handleOpenMenu);
+    window.addEventListener("phryvos:toggle-sidebar", handleToggleSidebar);
+    return () => {
+      window.removeEventListener("phryvos:open-menu", handleOpenMenu);
+      window.removeEventListener("phryvos:toggle-sidebar", handleToggleSidebar);
+    };
+  }, [toggleSidebar]);
 
   // ---------------------------------------------------------------- Lock Vault
   const handleLock = React.useCallback(async () => {
@@ -85,6 +125,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       resetIdleTimer();
+
+      // ⌘B or Ctrl+B -> Toggle Sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      }
 
       // ⌘K or Ctrl+K -> Command Palette
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -143,95 +189,215 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [setIsTabBlurred]);
 
+  const currentNav =
+    NAV_ITEMS.find((n) => pathname === n.href || pathname.startsWith(`${n.href}/`)) ??
+    NAV_ITEMS[0];
+  const isFullView = pathname.startsWith("/chat") || pathname.startsWith("/dots");
+
   return (
     <div
       className={`h-screen w-screen overflow-hidden flex flex-col bg-[var(--bg-0)] text-[var(--fg-0)] select-none transition-filter duration-200 ${
         isTabBlurred ? "blur-[20px]" : ""
       }`}
     >
-      {/* ── Main 3-Zone Workspace Shell ── */}
+      {/* ── Main Workspace Shell ── */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* 1. Left Icon Rail (56px fixed) — Desktop / Tablet */}
-        <aside className="hidden md:flex flex-col items-center justify-between w-[56px] bg-[var(--bg-1)] border-r border-[var(--border-subtle)] py-3 z-30 shrink-0">
-          {/* Top Glyph */}
-          <div className="flex flex-col items-center gap-3">
-            <Link
-              href="/chat"
-              className="h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] flex items-center justify-center hover:bg-[var(--accent)] hover:text-white transition-colors"
-              title="Phryvos Vault"
-            >
-              <Shield className="h-4 w-4 stroke-[1.5]" />
-            </Link>
+        {/* 1. Left Navigation Sidebar (Collapsible / Sliding) — Desktop / Tablet */}
+        <aside
+          className={`hidden md:flex flex-col justify-between bg-[var(--bg-1)] border-r border-[var(--border-subtle)] py-3 z-30 shrink-0 relative transition-[width] duration-200 ease-in-out select-none ${
+            sidebarCollapsed ? "w-14 items-center" : "w-56 px-3"
+          }`}
+        >
+          {/* Top Brand & Header */}
+          <div className="flex flex-col gap-2">
+            <div className={`flex items-center ${sidebarCollapsed ? "justify-center" : "justify-between px-1"}`}>
+              {sidebarCollapsed ? (
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] flex items-center justify-center hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer"
+                  title="Expand Sidebar (⌘B)"
+                >
+                  <Shield className="h-4 w-4 stroke-[1.5]" />
+                </button>
+              ) : (
+                <>
+                  <Link
+                    href="/chat"
+                    className="flex items-center gap-2 text-[var(--fg-0)] hover:opacity-85 transition-opacity"
+                    title="Phryvos Vault"
+                  >
+                    <div className="h-7 w-7 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] flex items-center justify-center">
+                      <Shield className="h-4 w-4 stroke-[1.5]" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-xs tracking-tight leading-none text-[var(--fg-0)]">
+                        phryvos k9
+                      </span>
+                      <span className="text-[10px] text-[var(--fg-2)] leading-tight mt-0.5 font-medium">
+                        encrypted vault
+                      </span>
+                    </div>
+                  </Link>
 
-            <div className="w-6 h-[1px] bg-[var(--border-subtle)] my-0.5" />
+                  <button
+                    type="button"
+                    onClick={toggleSidebar}
+                    className="h-7 w-7 rounded-[var(--radius-xs)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] flex items-center justify-center transition-colors cursor-pointer"
+                    title="Collapse Sidebar (⌘B)"
+                  >
+                    <PanelLeftClose className="h-4 w-4 stroke-[1.5]" />
+                  </button>
+                </>
+              )}
+            </div>
 
-            {/* Navigation Icons */}
-            <nav className="flex flex-col items-center gap-1">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            <div className={`${sidebarCollapsed ? "w-6 mx-auto" : "w-full"} h-[1px] bg-[var(--border-subtle)] my-1`} />
+
+            {/* Navigation Items */}
+            <nav className="flex flex-col gap-1">
+              {NAV_ITEMS.map(({ href, label, icon: Icon, shortcut }) => {
                 const isActive = pathname === href || pathname.startsWith(`${href}/`);
                 return (
                   <Link
                     key={href}
                     href={href}
-                    title={`${label} (⌘${label[0]})`}
-                    className={`relative flex items-center justify-center h-10 w-10 rounded-[var(--radius-sm)] transition-colors ${
+                    title={`${label} (⌘${shortcut})`}
+                    className={`relative flex items-center rounded-[var(--radius-sm)] transition-colors ${
+                      sidebarCollapsed
+                        ? "justify-center h-10 w-10 mx-auto"
+                        : "h-9 px-2.5 gap-2.5 w-full text-xs"
+                    } ${
                       isActive
-                        ? "bg-[var(--bg-3)] text-[var(--fg-0)]"
+                        ? "bg-[var(--bg-3)] text-[var(--fg-0)] font-medium"
                         : "text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)]"
                     }`}
                   >
-                    {/* Left 2px Active Bar */}
+                    {/* Active Bar indicator */}
                     {isActive && (
-                      <span className="absolute left-0 top-2 bottom-2 w-[2px] bg-[var(--accent)] rounded-r-[3px]" />
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-[var(--accent)] rounded-r-[3px]" />
                     )}
-                    <Icon className="h-5 w-5 stroke-[1.5]" />
+                    <Icon className="h-4 w-4 stroke-[1.5] shrink-0" />
+                    {!sidebarCollapsed && (
+                      <span className="flex-1 truncate">{label}</span>
+                    )}
+                    {!sidebarCollapsed && (
+                      <span className="text-[10px] text-[var(--fg-3)] font-mono">⌘{shortcut}</span>
+                    )}
                   </Link>
                 );
               })}
             </nav>
           </div>
 
-          {/* Bottom Rail Actions */}
-          <div className="flex flex-col items-center gap-2">
-            {/* Quick Search (⌘K) */}
-            <button
-              type="button"
-              onClick={() => setCommandPaletteOpen(true)}
-              className="flex items-center justify-center h-9 w-9 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] transition-colors"
-              title="Command Palette (⌘K)"
-            >
-              <Search className="h-4 w-4 stroke-[1.5]" />
-            </button>
+          {/* Bottom Actions */}
+          <div className="flex flex-col gap-1.5">
+            {sidebarCollapsed ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  className="flex items-center justify-center h-9 w-9 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] transition-colors mx-auto cursor-pointer"
+                  title="Command Palette (⌘K)"
+                >
+                  <Search className="h-4 w-4 stroke-[1.5]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLock}
+                  disabled={locking}
+                  className="relative flex items-center justify-center h-9 w-9 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors mx-auto cursor-pointer"
+                  title="Lock Vault Now (⌘⇧L)"
+                >
+                  <Lock className="h-4 w-4 stroke-[1.5]" />
+                  <span
+                    className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
+                      locking ? "bg-amber-400 animate-ping" : "bg-emerald-500"
+                    }`}
+                  />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  className="flex items-center justify-between h-8 px-2.5 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--bg-0)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:border-[var(--border)] transition-colors text-xs w-full cursor-pointer"
+                  title="Command Palette (⌘K)"
+                >
+                  <span className="flex items-center gap-2">
+                    <Search className="h-3.5 w-3.5" />
+                    <span>Search vault</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-[var(--fg-3)]">⌘K</span>
+                </button>
 
-            {/* Lock Button */}
-            <button
-              type="button"
-              onClick={handleLock}
-              disabled={locking}
-              className="relative flex items-center justify-center h-9 w-9 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors"
-              title="Lock Vault Now"
-            >
-              <Lock className="h-4 w-4 stroke-[1.5]" />
-              <span
-                className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
-                  locking ? "bg-amber-400 animate-ping" : "bg-emerald-500"
-                }`}
-              />
-            </button>
+                <button
+                  type="button"
+                  onClick={handleLock}
+                  disabled={locking}
+                  className="flex items-center justify-between h-8 px-2.5 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors text-xs w-full cursor-pointer"
+                  title="Lock Vault Now (⌘⇧L)"
+                >
+                  <span className="flex items-center gap-2">
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>Lock Vault</span>
+                  </span>
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      locking ? "bg-amber-400 animate-ping" : "bg-emerald-500"
+                    }`}
+                  />
+                </button>
+              </>
+            )}
           </div>
         </aside>
 
         {/* 2. Main Workspace (flex: 1) */}
         <main className="flex-1 flex flex-col min-w-0 bg-[var(--bg-0)] overflow-hidden relative">
-          {/* Mobile Menu Floating Trigger (Zero permanent top-bar clutter) */}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden fixed top-3 left-3 z-30 h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--bg-1)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--fg-1)] flex items-center justify-center shadow-xs hover:bg-[var(--bg-2)] active:scale-95 transition-all"
-            title="Open Navigation Menu"
-          >
-            <Menu className="h-4 w-4 stroke-[1.5]" />
-          </button>
+          {/* Mobile Top Header (In-flow flex item: NEVER overlaps child content) */}
+          {!isFullView && (
+            <div className="md:hidden h-12 px-3 border-b border-[var(--border-subtle)] bg-[var(--bg-1)] flex items-center justify-between shrink-0 select-none">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="h-8 w-8 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] text-[var(--fg-1)] flex items-center justify-center hover:bg-[var(--bg-3)] active:scale-95 transition-all shrink-0"
+                  title="Open Navigation Menu"
+                >
+                  <Menu className="h-4 w-4 stroke-[1.5]" />
+                </button>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="font-semibold text-xs text-[var(--fg-0)]">phryvos</span>
+                  <span className="text-[var(--border)]">/</span>
+                  <span className="text-xs text-[var(--fg-2)] font-medium capitalize">
+                    {currentNav?.label ?? "Vault"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCommandPaletteOpen(true)}
+                  className="h-8 w-8 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] flex items-center justify-center"
+                  title="Command Palette (⌘K)"
+                >
+                  <Search className="h-4 w-4 stroke-[1.5]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLock}
+                  disabled={locking}
+                  className="h-8 w-8 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] flex items-center justify-center"
+                  title="Lock Vault"
+                >
+                  <Lock className="h-4 w-4 stroke-[1.5]" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Page Workspace Children */}
           <div className="flex-1 overflow-auto flex flex-col min-h-0">
@@ -250,7 +416,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setAiDockOpen(true)}
-            className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-[var(--bg-1)] border border-[var(--border)] text-[var(--accent)] shadow-[var(--shadow-dialog)] flex items-center justify-center hover:bg-[var(--bg-2)] hover:border-[var(--accent)] transition-all z-40 active:scale-95"
+            className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-[var(--bg-1)] border border-[var(--border)] text-[var(--accent)] shadow-[var(--shadow-dialog)] flex items-center justify-center hover:bg-[var(--bg-2)] hover:border-[var(--accent)] transition-all z-40 active:scale-95 cursor-pointer"
             title="Open Quick Assistant (⌘J)"
           >
             <Sparkles className="h-5 w-5 stroke-[1.5]" />
@@ -269,44 +435,70 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div
             onClick={() => setMobileMenuOpen(false)}
-            className="fixed inset-0 bg-black/60"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
           />
-          <div className="relative w-[280px] h-full bg-[var(--bg-1)] border-r border-[var(--border-subtle)] flex flex-col p-4 z-10">
-            <div className="flex items-center justify-between pb-4 border-b border-[var(--border-subtle)] mb-4">
-              <span className="font-semibold text-[var(--fg-0)]">Phryvos Navigation</span>
+          <div className="relative w-[280px] max-w-[85vw] h-full bg-[var(--bg-1)] border-r border-[var(--border-subtle)] flex flex-col p-4 z-10 shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between pb-3.5 border-b border-[var(--border-subtle)] mb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-7 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)] flex items-center justify-center">
+                  <Shield className="h-4 w-4 stroke-[1.5]" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs text-[var(--fg-0)]">phryvos k9</span>
+                  <span className="text-[10px] text-[var(--fg-2)] font-medium">navigation</span>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-1 text-[var(--fg-2)] hover:text-[var(--fg-0)]"
+                className="p-1 rounded-[var(--radius-xs)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] transition-colors cursor-pointer"
+                title="Close Navigation"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-sm)] text-[var(--text-base)] ${
-                    pathname.startsWith(href)
-                      ? "bg-[var(--bg-3)] text-[var(--fg-0)] font-medium"
-                      : "text-[var(--fg-2)] hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
-                  }`}
-                >
-                  <Icon className="h-4 w-4 stroke-[1.5]" />
-                  <span>{label}</span>
-                </Link>
-              ))}
+              {NAV_ITEMS.map(({ href, label, icon: Icon, shortcut }) => {
+                const isActive = pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-sm)] text-[var(--text-sm)] transition-colors ${
+                      isActive
+                        ? "bg-[var(--bg-3)] text-[var(--fg-0)] font-medium"
+                        : "text-[var(--fg-2)] hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4 stroke-[1.5]" />
+                      <span>{label}</span>
+                    </div>
+                    <span className="text-[10px] text-[var(--fg-3)] font-mono">⌘{shortcut}</span>
+                  </Link>
+                );
+              })}
             </nav>
-            <div className="pt-4 border-t border-[var(--border-subtle)]">
+            <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setCommandPaletteOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--bg-0)] text-[var(--fg-2)] hover:text-[var(--fg-0)] text-xs transition-colors cursor-pointer"
+              >
+                <Search className="h-3.5 w-3.5" />
+                <span>Search vault (⌘K)</span>
+              </button>
               <button
                 type="button"
                 onClick={handleLock}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-[var(--radius-sm)] text-[var(--danger)] hover:bg-[var(--danger-soft)]"
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--danger-soft)] text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white transition-colors text-xs font-medium cursor-pointer"
               >
-                <Lock className="h-4 w-4" />
-                <span>Lock Vault</span>
+                <Lock className="h-3.5 w-3.5" />
+                <span>Lock Vault Now</span>
               </button>
             </div>
           </div>

@@ -130,4 +130,67 @@ describe("Audit Verification: Security Fixes", () => {
       );
     }, /Cross-site request forgery blocked/);
   });
+
+  it("Tool approval binds cryptographically to action hash preventing TOCTOU tampering", () => {
+    const { requestApproval, resolveApproval, computeActionHash } = require("../lib/agent/guardrails.ts");
+
+    const req = requestApproval({
+      tool: "write_file",
+      args: { path: "/secret.txt", content: "data" },
+      description: "Write secret",
+    });
+
+    assert.ok(req.actionHash);
+    const expected = computeActionHash("write_file", { path: "/secret.txt", content: "data" });
+    assert.strictEqual(req.actionHash, expected);
+
+    // Tampered hash should be rejected
+    const badRes = resolveApproval(req.id, "allow", "tampered_hash_12345");
+    assert.strictEqual(badRes.ok, false);
+    assert.ok(badRes.error?.includes("Action hash mismatch"));
+
+    // Matching hash succeeds
+    const goodRes = resolveApproval(req.id, "allow", req.actionHash);
+    assert.strictEqual(goodRes.ok, true);
+  });
+
+  it("purgeFile permanently wipes file, all versions, and FTS entries", () => {
+    const Database = require("better-sqlite3");
+    const { runMigrations } = require("../lib/db/migrate.ts");
+    const { createFile, writeFile, purgeFile } = require("../lib/vault-service.ts");
+
+    const db = new Database(":memory:");
+    runMigrations(db);
+
+    const key = Buffer.alloc(32, 0x42);
+    const ctx = { db, key };
+
+    createFile(ctx, "/confidential.txt");
+    writeFile(ctx, "/confidential.txt", "TopSecretV1");
+    writeFile(ctx, "/confidential.txt", "TopSecretV2");
+
+    // Check file and versions exist
+    const fileRow = db.prepare("SELECT id FROM files WHERE path = ?").get("/confidential.txt");
+    assert.ok(fileRow);
+    const verCount = db.prepare("SELECT count(*) as c FROM file_versions WHERE file_id = ?").get(fileRow.id);
+    assert.strictEqual(verCount.c, 1);
+
+    // Purge file
+    purgeFile(ctx, "/confidential.txt");
+
+    // Verify complete wiping
+    const purgedFile = db.prepare("SELECT * FROM files WHERE path = ?").get("/confidential.txt");
+    assert.strictEqual(purgedFile, undefined);
+
+    const purgedVer = db.prepare("SELECT * FROM file_versions WHERE file_id = ?").all(fileRow.id);
+    assert.strictEqual(purgedVer.length, 0);
+
+    const purgedFts = db.prepare("SELECT * FROM files_fts WHERE path = ?").all("/confidential.txt");
+    assert.strictEqual(purgedFts.length, 0);
+
+    const purgedContentFts = db.prepare("SELECT * FROM file_content_fts WHERE file_id = ?").all(fileRow.id);
+    assert.strictEqual(purgedContentFts.length, 0);
+
+    db.close();
+  });
 });

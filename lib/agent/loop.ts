@@ -48,6 +48,7 @@ export interface LoopDeps {
     tool: string;
     args: Record<string, unknown>;
     description: string;
+    actionHash?: string;
   }) => void;
   appendAssistant: (text: string, toolCalls: ToolCall[]) => void;
   appendTool: (toolCallId: string, name: string, content: string) => void;
@@ -312,6 +313,7 @@ MANDATORY NEXT STEPS:
             tool: tc.name,
             args: tc.args,
             description,
+            actionHash: pending.actionHash,
           });
           approval = await pending.promise;
           blocked = approval.decision !== "allowed";

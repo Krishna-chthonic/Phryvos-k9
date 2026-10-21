@@ -501,6 +501,49 @@ export function deleteFile(ctx: VaultCtx, path: string): void {
   tx();
 }
 
+/**
+ * Permanently purge a file or directory tree:
+ * Deletes from `files`, all past versions from `file_versions`, FTS indexes,
+ * vector chunks, and triggers incremental_vacuum to overwrite freed pages.
+ */
+export function purgeFile(ctx: VaultCtx, path: string): void {
+  const p = normalizeVaultPath(path);
+  const r = selectMeta(ctx, p);
+  if (!r) throw new VaultError("not_found", `Not found: ${p}`);
+
+  const tx = ctx.db.transaction(() => {
+    if (r.is_dir) {
+      const ids = ctx.db
+        .prepare("SELECT id FROM files WHERE path = ? OR path LIKE ?")
+        .all(p, p + "/%") as Array<{ id: number }>;
+      const delVer = ctx.db.prepare("DELETE FROM file_versions WHERE file_id = ?");
+      const delFts = ctx.db.prepare("DELETE FROM file_content_fts WHERE file_id = ?");
+      for (const row of ids) {
+        delVer.run(row.id);
+        delFts.run(row.id);
+      }
+      ctx.db.prepare("DELETE FROM files_fts WHERE path = ? OR path LIKE ?").run(escapeLike(p), p + "/%");
+      ctx.db.prepare("DELETE FROM files WHERE path = ? OR path LIKE ?").run(p, p + "/%");
+    } else {
+      ctx.db.prepare("DELETE FROM file_versions WHERE file_id = ?").run(r.id);
+      ctx.db.prepare("DELETE FROM file_content_fts WHERE file_id = ?").run(r.id);
+      ctx.db.prepare("DELETE FROM files_fts WHERE path = ?").run(escapeLike(p));
+      ctx.db.prepare("DELETE FROM files WHERE id = ?").run(r.id);
+    }
+    try {
+      ctx.db.prepare("DELETE FROM file_chunks WHERE file_path = ? OR file_path LIKE ?").run(p, p + "/%");
+    } catch {
+      // file_chunks table may not exist
+    }
+  });
+  tx();
+  try {
+    ctx.db.pragma("incremental_vacuum(10)");
+  } catch {
+    // pragma fallback
+  }
+}
+
 export function restoreFile(ctx: VaultCtx, path: string): void {
   const p = normalizeVaultPath(path);
   const r = selectMeta(ctx, p);

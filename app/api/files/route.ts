@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { vaultRoute } from "@/server/vault-guard";
-import { createDir, createFile, deleteFile, listDir, listTrash } from "@/lib/vault-service";
+import { createDir, createFile, deleteFile, listDir, listTrash, purgeFile } from "@/lib/vault-service";
 
 /**
  * GET  /api/files?path=/notes      → direct children
  * POST /api/files {path, type}     → create file or directory
- * DELETE /api/files?path=          → soft delete (trash)
+ * DELETE /api/files?path=          → soft delete (trash) or ?permanent=1 to purge versions & FTS
  */
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
@@ -42,14 +42,20 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const path = new URL(req.url).searchParams.get("path");
+  const sp = new URL(req.url).searchParams;
+  const path = sp.get("path");
+  const permanent = sp.get("permanent") === "1" || sp.get("purge") === "1";
   if (!path)
     return Response.json(
       { error: { code: "invalid_body", message: "?path= required" } },
       { status: 400 },
     );
   return vaultRoute(({ db, key }) => {
-    deleteFile({ db, key }, path);
-    return Response.json({ ok: true });
+    if (permanent) {
+      purgeFile({ db, key }, path);
+    } else {
+      deleteFile({ db, key }, path);
+    }
+    return Response.json({ ok: true, purged: permanent });
   });
 }

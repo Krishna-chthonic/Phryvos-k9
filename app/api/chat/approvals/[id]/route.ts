@@ -36,16 +36,19 @@ export async function PUT(
     return internalResponse(e);
   }
 
-  const body = z.object({ decision: z.enum(["allow", "deny"]) }).safeParse(
-    await req.json().catch(() => null),
-  );
+  const body = z
+    .object({
+      decision: z.enum(["allow", "deny"]),
+      actionHash: z.string().optional(),
+    })
+    .safeParse(await req.json().catch(() => null));
   if (!body.success)
     return Response.json(
       { error: { code: "invalid_body", message: "decision must be \"allow\" or \"deny\"" } },
       { status: 400 },
     );
 
-  const res = resolveApproval(id, body.data.decision);
+  const res = resolveApproval(id, body.data.decision, body.data.actionHash);
   if (!res.ok)
     return Response.json({ error: { code: "unknown", message: res.error } }, { status: 404 });
   return Response.json({ ok: true });

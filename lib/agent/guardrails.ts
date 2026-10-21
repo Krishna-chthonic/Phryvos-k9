@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * Agent guardrails: hard limits on the tool loop so a rogue model can't
@@ -47,10 +47,21 @@ export function truncateResult(text: string, cap = RESULT_CHAR_CAP): string {
 
 export type ApprovalDecision = "allowed" | "denied" | "auto_denied";
 
+export function computeActionHash(tool: string, args: Record<string, unknown>): string {
+  const sorted = Object.keys(args || {})
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = args[key];
+      return acc;
+    }, {});
+  return createHash("sha256").update(`${tool}:${JSON.stringify(sorted)}`).digest("hex");
+}
+
 export interface PendingApproval {
   id: string;
   tool: string;
   args: Record<string, unknown>;
+  actionHash: string;
   description: string;
   createdAt: number;
   state: "pending" | ApprovalDecision;
@@ -73,7 +84,7 @@ export interface ApprovalOutcome {
 
 /**
  * Ask the user (via the SSE `approval` event) before a destructive tool runs.
- * Returns the pending approval's id immediately; the promise resolves to
+ * Returns the pending approval's id and hash immediately; the promise resolves to
  * `auto_denied` if nobody answers within the TTL.
  */
 export function requestApproval(opts: {
@@ -81,12 +92,14 @@ export function requestApproval(opts: {
   args: Record<string, unknown>;
   description: string;
   signal?: AbortSignal;
-}): { id: string; promise: Promise<ApprovalOutcome> } {
+}): { id: string; actionHash: string; promise: Promise<ApprovalOutcome> } {
   const id = randomUUID();
+  const actionHash = computeActionHash(opts.tool, opts.args);
   const entry: PendingApproval = {
     id,
     tool: opts.tool,
     args: opts.args,
+    actionHash,
     description: opts.description,
     createdAt: Date.now(),
     state: "pending",
@@ -119,7 +132,7 @@ export function requestApproval(opts: {
       resolve({ decision: d, detail });
     };
   });
-  return { id, promise };
+  return { id, actionHash, promise };
 }
 
 function settle(id: string, decision: ApprovalDecision): void {
@@ -133,10 +146,14 @@ function settle(id: string, decision: ApprovalDecision): void {
 export function resolveApproval(
   id: string,
   decision: "allow" | "deny",
+  expectedHash?: string,
 ): { ok: boolean; error?: string } {
   const a = approvals.get(id);
   if (!a) return { ok: false, error: "Unknown or already-resolved approval" };
   if (a.state !== "pending") return { ok: false, error: `Already ${a.state}` };
+  if (expectedHash && a.actionHash && expectedHash !== a.actionHash) {
+    return { ok: false, error: "Action hash mismatch: operation parameters do not match approval" };
+  }
   settle(id, decision === "allow" ? "allowed" : "denied");
   return { ok: true };
 }

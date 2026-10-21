@@ -32,8 +32,7 @@ import { DotTasksPanel } from "./DotTasksPanel";
 import { RecipesPanel } from "./RecipesPanel";
 import { SwarmCoordinatorPanel } from "./SwarmCoordinatorPanel";
 import { PaperclipOrgPanel } from "./PaperclipOrgPanel";
-import { WorkflowCanvas } from "@/components/workflows/WorkflowCanvas";
-import { BUILTIN_WORKFLOW_TEMPLATES } from "@/lib/workflows/workflow-types";
+import { FlowlibEditor } from "@/components/workflows/FlowlibEditor";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
@@ -626,7 +625,7 @@ export function DotWorkspace({
 
         {activeTab === "workflows" && (
           <div className="h-full w-full overflow-hidden">
-            <WorkflowCanvas initialWorkflows={BUILTIN_WORKFLOW_TEMPLATES} />
+            <FlowlibEditor />
           </div>
         )}
 

@@ -20,14 +20,12 @@ import {
   Shield,
   Menu,
   X,
-  CheckCircle2,
-  AlertTriangle,
-  RotateCw,
 } from "lucide-react";
 import { useUiStore } from "@/stores/ui-store";
 import { authApi } from "@/lib/api/client";
 import { keyring } from "@/lib/keyring";
 import { CommandPalette } from "@/components/shell/CommandPalette";
+import { FloatingAssistant } from "@/components/shell/FloatingAssistant";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageSquare, shortcut: "1" },
@@ -58,8 +56,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const [locking, setLocking] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  const [syncStatus, setSyncStatus] = React.useState<"synced" | "saving" | "offline">("synced");
-  const [aiMode, setAiMode] = React.useState<"local" | "cloud" | "off">("cloud");
 
   // ---------------------------------------------------------------- Lock Vault
   const handleLock = React.useCallback(async () => {
@@ -227,38 +223,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* 2. Main Workspace (flex: 1) */}
         <main className="flex-1 flex flex-col min-w-0 bg-[var(--bg-0)] overflow-hidden relative">
-          {/* Top Mobile Bar (Visible on mobile screens <768px) */}
-          <div className="md:hidden flex items-center justify-between h-[48px] px-4 bg-[var(--bg-1)] border-b border-[var(--border-subtle)] shrink-0 z-20">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--fg-1)] hover:bg-[var(--bg-2)]"
-              >
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-              <span className="text-[var(--text-md)] font-semibold text-[var(--fg-0)]">
-                Phryvos
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCommandPaletteOpen(true)}
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--fg-0)]"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleLock}
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--danger)]"
-              >
-                <Lock className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          {/* Mobile Menu Floating Trigger (Zero permanent top-bar clutter) */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="md:hidden fixed top-3 left-3 z-30 h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--bg-1)]/90 backdrop-blur-md border border-[var(--border)] text-[var(--fg-1)] flex items-center justify-center shadow-xs hover:bg-[var(--bg-2)] active:scale-95 transition-all"
+            title="Open Navigation Menu"
+          >
+            <Menu className="h-4 w-4 stroke-[1.5]" />
+          </button>
 
           {/* Page Workspace Children */}
           <div className="flex-1 overflow-auto flex flex-col min-h-0">
@@ -266,112 +239,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </main>
 
-        {/* 3. Global AI Dock (380px collapsible, ⌘J) */}
-        <aside
-          style={{ width: aiDockOpen ? "380px" : "0px" }}
-          className={`shrink-0 h-full bg-[var(--bg-1)] border-l border-[var(--border-subtle)] overflow-hidden transition-[width] duration-200 ease-out z-20 flex flex-col`}
-        >
-          {aiDockOpen && (
-            <div className="w-[380px] h-full flex flex-col">
-              {/* Dock Header */}
-              <div className="flex items-center justify-between h-[48px] px-4 border-b border-[var(--border-subtle)] shrink-0">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-[var(--accent)] stroke-[1.5]" />
-                  <span className="text-[var(--text-base)] font-medium text-[var(--fg-0)]">
-                    Assistant Dock
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAiDockOpen(false)}
-                  className="p-1 rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)] transition-colors"
-                >
-                  <X className="h-4 w-4 stroke-[1.5]" />
-                </button>
-              </div>
+        {/* 3. Floating Global AI Assistant (Floatable Modal, ⌘J) */}
+        <FloatingAssistant
+          open={aiDockOpen}
+          onClose={() => setAiDockOpen(false)}
+        />
 
-              {/* Dock Body */}
-              <div className="flex-1 p-4 overflow-y-auto flex flex-col justify-between text-[var(--text-sm)] text-[var(--fg-2)]">
-                <div className="text-center py-12">
-                  <Sparkles className="h-8 w-8 text-[var(--fg-3)] mx-auto mb-3 stroke-[1.5]" />
-                  <p className="font-medium text-[var(--fg-1)]">Quick Assistant</p>
-                  <p className="text-[var(--text-xs)] text-[var(--fg-2)] mt-1 max-w-[240px] mx-auto">
-                    Ask questions, inspect active context, or generate notes without leaving your workspace.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-[var(--radius-md)] bg-[var(--bg-2)] border border-[var(--border-subtle)] text-[var(--text-xs)]">
-                  <span className="text-[var(--fg-1)] font-medium">Pro-tip:</span> Press{" "}
-                  <code className="text-[var(--accent)] font-mono">⌘J</code> anywhere to toggle this dock.
-                </div>
-              </div>
-            </div>
-          )}
-        </aside>
-
-        {/* Floating Sparkles Trigger when AI Dock is Closed */}
+        {/* Floating Sparkles Trigger when AI Assistant is Closed */}
         {!aiDockOpen && (
           <button
             type="button"
             onClick={() => setAiDockOpen(true)}
-            className="fixed bottom-10 right-4 h-11 w-11 rounded-full bg-[var(--bg-2)] border border-[var(--border)] text-[var(--accent)] shadow-[var(--shadow-popover)] flex items-center justify-center hover:bg-[var(--bg-3)] hover:scale-105 transition-all z-30"
-            title="Open Assistant Dock (⌘J)"
+            className="fixed bottom-6 right-6 h-11 w-11 rounded-full bg-[var(--bg-1)] border border-[var(--border)] text-[var(--accent)] shadow-[var(--shadow-dialog)] flex items-center justify-center hover:bg-[var(--bg-2)] hover:border-[var(--accent)] transition-all z-40 active:scale-95"
+            title="Open Quick Assistant (⌘J)"
           >
             <Sparkles className="h-5 w-5 stroke-[1.5]" />
           </button>
         )}
       </div>
-
-      {/* ── 4. Bottom Status Bar (28px full width) ── */}
-      <footer className="h-[28px] w-full bg-[var(--bg-1)] border-t border-[var(--border-subtle)] px-3 flex items-center justify-between text-[11px] text-[var(--fg-2)] shrink-0 z-30 select-none">
-        {/* Left: Lock Status */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleLock}
-            className="inline-flex items-center gap-1.5 hover:text-[var(--fg-0)] transition-colors"
-          >
-            <Lock className="h-3 w-3 text-emerald-400 stroke-[1.5]" />
-            <span>Unlocked</span>
-          </button>
-        </div>
-
-        {/* Center: AI Provider Mode Dot */}
-        <div className="flex items-center gap-1.5">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              aiMode === "local"
-                ? "bg-emerald-400"
-                : aiMode === "cloud"
-                ? "bg-amber-400"
-                : "bg-zinc-500"
-            }`}
-          />
-          <span className="capitalize">{aiMode} Provider</span>
-        </div>
-
-        {/* Right: Sync Status */}
-        <div className="flex items-center gap-1.5">
-          {syncStatus === "synced" && (
-            <>
-              <CheckCircle2 className="h-3 w-3 text-emerald-400 stroke-[1.5]" />
-              <span>Synced &middot; Local-first</span>
-            </>
-          )}
-          {syncStatus === "saving" && (
-            <>
-              <RotateCw className="h-3 w-3 text-cyan-400 animate-spin stroke-[1.5]" />
-              <span>Saving changes...</span>
-            </>
-          )}
-          {syncStatus === "offline" && (
-            <>
-              <AlertTriangle className="h-3 w-3 text-amber-400 stroke-[1.5]" />
-              <span>Offline mode</span>
-            </>
-          )}
-        </div>
-      </footer>
 
       {/* ── Global Command Palette (⌘K) ── */}
       <CommandPalette

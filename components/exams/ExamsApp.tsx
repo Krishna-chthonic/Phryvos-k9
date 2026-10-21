@@ -57,11 +57,11 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xs">
-      <div className="w-full max-w-md rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 p-5 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-2xs p-4">
+      <div className="w-full max-w-md rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] text-[var(--fg-0)] p-5 shadow-[var(--shadow-dialog)]">
+        <div className="mb-4 flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+          <h2 className="text-[var(--text-md)] font-semibold text-[var(--fg-0)]">{title}</h2>
+          <button onClick={onClose} className="text-[var(--fg-2)] hover:text-[var(--fg-0)] text-lg p-1">×</button>
         </div>
         {children}
       </div>
@@ -83,6 +83,31 @@ export function ExamsApp() {
   });
 
   const [viewMode, setViewMode] = React.useState<"topics" | "constellation" | "fsrs" | "bossfight" | "socratic" | "physics" | "dag" | "trap">("topics");
+  const [timerSeconds, setTimerSeconds] = React.useState(25 * 60);
+  const [timerRunning, setTimerRunning] = React.useState(false);
+
+  React.useEffect(() => {
+    let interval: any = null;
+    if (timerRunning && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => prev - 1);
+      }, 1000);
+    } else if (timerSeconds === 0 && timerRunning) {
+      setTimerRunning(false);
+      if (state.selectedSubject) {
+        apiFetch("/api/study-logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subjectId: state.selectedSubject.id,
+            durationMin: 25,
+            note: "Pomodoro Focus Sprint (25m)",
+          }),
+        }).then(() => loadLogs(undefined, state.selectedSubject?.id));
+      }
+    }
+    return () => clearInterval(interval);
+  }, [timerRunning, timerSeconds, state.selectedSubject]);
   const [latexCode, setLatexCode] = React.useState(
     "\\begin{aligned}\n  E_k &= \\frac{1}{2} m v^2 \\\\\n  E_p &= m g h \\\\\n  E_{total} &= E_k + E_p\n\\end{aligned}"
   );
@@ -275,134 +300,183 @@ export function ExamsApp() {
   const totalStudyMin = state.logs.reduce((sum, l) => sum + l.durationMin, 0);
   const totalStudyHrs = (totalStudyMin / 60).toFixed(1);
 
+  const targetDateObj = state.selectedSubject?.targetDate
+    ? new Date(state.selectedSubject.targetDate)
+    : null;
+  const daysUntilExam = targetDateObj
+    ? Math.ceil((targetDateObj.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <div className="flex h-full flex-col gap-4 p-5 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Exam Prep</h1>
-        <Button variant="primary" onClick={() => setShowSubjectModal(true)}>
-          <Plus className="mr-1 h-4 w-4" /> New Subject
-        </Button>
+    <div className="flex h-full flex-col gap-3 p-5 bg-[var(--bg-0)] text-[var(--fg-0)] select-none overflow-hidden">
+      {/* ── Top Header Bar ── */}
+      <div className="flex items-center justify-between shrink-0">
+        <div>
+          <h1 className="text-[var(--text-lg)] font-semibold text-[var(--fg-0)] tracking-tight">
+            Study & Exam OS
+          </h1>
+          <p className="text-[var(--text-xs)] text-[var(--fg-2)] mt-0.5">
+            Spaced repetition, concept graph, and active recall sprints
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Focus Sprint Timer */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-[var(--radius-sm)] bg-[var(--bg-1)] border border-[var(--border)] text-[var(--text-xs)]">
+            <Clock className="h-3.5 w-3.5 text-[var(--accent)]" />
+            <span className="font-mono font-medium text-[var(--fg-0)]">{formatTimer(timerSeconds)}</span>
+            <button
+              type="button"
+              onClick={() => setTimerRunning(!timerRunning)}
+              className="px-2 py-0.5 rounded-[var(--radius-xs)] bg-[var(--accent)] text-[var(--accent-fg)] text-[10px] font-medium hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
+            >
+              {timerRunning ? "Pause" : "Focus Sprint"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTimerRunning(false);
+                setTimerSeconds(25 * 60);
+              }}
+              className="text-[var(--fg-2)] hover:text-[var(--fg-0)] text-[10px] cursor-pointer"
+            >
+              Reset
+            </button>
+          </div>
+
+          <Button variant="primary" onClick={() => setShowSubjectModal(true)}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> New Subject
+          </Button>
+        </div>
       </div>
 
       {/* Keystroke Fatigue Indicator - compact mode in header */}
       {fatigue.showWarning && (
-        <div className="mb-2">
+        <div className="mb-1">
           <KeystrokeFatigueIndicator fatigue={fatigue} compact={true} onDismiss={() => resetSession()} />
         </div>
       )}
 
       {state.error && (
-        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-600 dark:text-red-400">
+        <div className="rounded-[var(--radius-sm)] border border-[var(--danger)]/30 bg-[var(--danger-soft)] p-2.5 text-[var(--text-xs)] text-[var(--danger)]">
           {state.error}
         </div>
       )}
 
-      {/* Mode navigation bar */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <button
-          onClick={() => setViewMode("topics")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "topics"
-              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <BookOpen className="h-3.5 w-3.5" />
-          <span>Syllabus & Topics</span>
-        </button>
-        <button
-          onClick={() => setViewMode("constellation")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "constellation"
-              ? "bg-cyan-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>Constellation Star-Map</span>
-        </button>
-        <button
-          onClick={() => setViewMode("fsrs")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "fsrs"
-              ? "bg-indigo-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span>FSRS Flashcards</span>
-        </button>
-        <button
-          onClick={() => setViewMode("bossfight")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "bossfight"
-              ? "bg-rose-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Swords className="h-3.5 w-3.5" />
-          <span>AIR 1 Boss Fight</span>
-        </button>
-        <button
-          onClick={() => setViewMode("socratic")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "socratic"
-              ? "bg-purple-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Brain className="h-3.5 w-3.5" />
-          <span>Socratic Ghost & Math</span>
-        </button>
-        <button
-          onClick={() => setViewMode("physics")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "physics"
-              ? "bg-emerald-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Activity className="h-3.5 w-3.5" />
-          <span>Physics Arena</span>
-        </button>
-        <button
-          onClick={() => setViewMode("dag")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "dag"
-              ? "bg-amber-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Network className="h-3.5 w-3.5" />
-          <span>Syllabus DAG (CPM)</span>
-        </button>
-        <button
-          onClick={() => setViewMode("trap")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            viewMode === "trap"
-              ? "bg-violet-600 text-white shadow-xs"
-              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>Trap Questions</span>
-        </button>
+      {/* ── Clean Unified Mode Navigation Bar ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-2 shrink-0">
+        <div className="flex items-center gap-1 bg-[var(--bg-1)] p-0.5 rounded-[var(--radius-sm)] border border-[var(--border)]">
+          <button
+            type="button"
+            onClick={() => setViewMode("topics")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-xs)] text-[var(--text-xs)] font-medium transition-colors cursor-pointer ${
+              viewMode === "topics"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)]"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>Syllabus & Topics</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("fsrs")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-xs)] text-[var(--text-xs)] font-medium transition-colors cursor-pointer ${
+              viewMode === "fsrs"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)]"
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>FSRS Flashcards</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("dag")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-xs)] text-[var(--text-xs)] font-medium transition-colors cursor-pointer ${
+              viewMode === "dag"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)]"
+            }`}
+          >
+            <Network className="h-3.5 w-3.5" />
+            <span>Syllabus DAG</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("constellation")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-xs)] text-[var(--text-xs)] font-medium transition-colors cursor-pointer ${
+              viewMode === "constellation"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)]"
+                : "text-[var(--fg-2)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-2)]"
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Star-Map</span>
+          </button>
+
+          {/* Interactive Labs Dropdown */}
+          <div className="relative inline-flex items-center pl-1 border-l border-[var(--border-subtle)]">
+            <select
+              value={["bossfight", "socratic", "physics", "trap"].includes(viewMode) ? viewMode : "bossfight"}
+              onChange={(e) => setViewMode(e.target.value as any)}
+              className={`h-[28px] px-2 rounded-[var(--radius-xs)] text-[var(--text-xs)] font-medium outline-none cursor-pointer transition-colors ${
+                ["bossfight", "socratic", "physics", "trap"].includes(viewMode)
+                  ? "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent-border)]"
+                  : "bg-transparent text-[var(--fg-2)] hover:text-[var(--fg-0)]"
+              }`}
+            >
+              <option value="bossfight">⚔️ Boss Fight Arena</option>
+              <option value="socratic">🧠 Socratic Math Scratchpad</option>
+              <option value="physics">⚡ Physics Arena</option>
+              <option value="trap">⚠️ Trap Questions</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Selected Subject Quick Pill */}
+        {state.selectedSubject && (
+          <div className="hidden md:flex items-center gap-2 text-[var(--text-xs)] text-[var(--fg-2)]">
+            <span>
+              Subject:{" "}
+              <strong className="text-[var(--fg-0)] font-medium">
+                {state.selectedSubject.name}
+              </strong>
+            </span>
+            {daysUntilExam !== null && (
+              <span
+                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold border ${
+                  daysUntilExam > 0
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent-border)]"
+                    : "bg-[var(--danger-soft)] text-[var(--danger)] border-[var(--danger)]/30"
+                }`}
+              >
+                {daysUntilExam > 0 ? `D-${daysUntilExam}` : "Target Today"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {viewMode === "dag" && (
-        <div className="flex-1 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <div className="flex-1 overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)]">
           <DagGraphView className="h-full w-full" />
         </div>
       )}
 
       {viewMode === "constellation" && (
-        <div className="flex-1 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <div className="flex-1 overflow-hidden rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)]">
           <ConstellationMap subjects={constellationData} />
         </div>
       )}
 
       {viewMode === "fsrs" && (
-        <div className="flex-1 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="flex-1 overflow-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-4">
           <FSRSReview
             subjectId={state.selectedSubject?.id ?? (state.subjects[0]?.id || 1)}
             subjectName={state.selectedSubject?.name ?? (state.subjects[0]?.name || "Physics")}
@@ -412,13 +486,13 @@ export function ExamsApp() {
       )}
 
       {viewMode === "bossfight" && (
-        <div className="flex-1 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <div className="flex-1 overflow-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)]">
           <BossFightArena />
         </div>
       )}
 
       {viewMode === "physics" && (
-        <div className="flex-1 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="flex-1 overflow-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-4">
           <PhysicsArena />
         </div>
       )}
@@ -426,12 +500,12 @@ export function ExamsApp() {
       {viewMode === "socratic" && (
         <div className="flex flex-1 flex-col lg:flex-row gap-4 overflow-auto">
           <div className="flex-1 flex flex-col gap-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-xs">
-              <h2 className="text-sm font-semibold mb-2 text-zinc-900 dark:text-zinc-100">Math Scratchpad (LaTeX)</h2>
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-xs">
+              <h2 className="text-[var(--text-sm)] font-semibold mb-2 text-[var(--fg-0)]">Math Scratchpad (LaTeX)</h2>
               <textarea
                 value={latexCode}
                 onChange={(e) => setLatexCode(e.target.value)}
-                className="w-full h-32 font-mono text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-2.5 outline-hidden text-zinc-900 dark:text-zinc-100"
+                className="w-full h-32 font-mono text-xs rounded-[var(--radius-xs)] border border-[var(--border)] bg-[var(--bg-0)] p-2.5 outline-hidden text-[var(--fg-0)]"
               />
             </div>
             <SocraticAuditor latexContent={latexCode} />
@@ -449,7 +523,7 @@ export function ExamsApp() {
       )}
 
       {viewMode === "trap" && (
-        <div className="flex-1 overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="flex-1 overflow-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-4">
           <TrapQuestionsView
             subject={state.selectedSubject?.name}
             onBack={() => setViewMode("topics")}
@@ -460,169 +534,181 @@ export function ExamsApp() {
       {viewMode === "topics" && (
       <div className="flex flex-1 gap-4 overflow-hidden">
         {/* Subjects sidebar */}
-        <div className="w-64 flex-shrink-0 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
-          <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        <div className="w-64 flex-shrink-0 overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-3">
+          <h2 className="mb-3 text-[11px] font-medium uppercase tracking-wider text-[var(--fg-2)]">
             Subjects
           </h2>
           {state.subjects.map((s) => (
             <button
               key={s.id}
               onClick={() => selectSubject(s)}
-              className={`mb-1 w-full rounded-lg p-3 text-left transition-colors cursor-pointer ${
+              className={`mb-1.5 w-full rounded-[var(--radius-sm)] p-2.5 text-left transition-colors cursor-pointer border ${
                 state.selectedSubject?.id === s.id
-                  ? "bg-blue-50 ring-1 ring-blue-300 dark:bg-blue-950/40 dark:ring-blue-800"
-                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                  ? "bg-[var(--accent-soft)] border-[var(--accent-border)] ring-1 ring-[var(--accent)]"
+                  : "bg-[var(--bg-0)] border-[var(--border-subtle)] hover:bg-[var(--bg-2)]"
               }`}
             >
               <div className="flex items-center gap-2">
                 {s.color && (
                   <span
-                    className="h-3 w-3 rounded-full"
+                    className="h-2.5 w-2.5 rounded-full"
                     style={{ background: s.color }}
                   />
                 )}
-                <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{s.name}</span>
+                <span className="font-medium text-[var(--text-sm)] text-[var(--fg-0)]">{s.name}</span>
               </div>
               {s.targetDate && (
-                <div className="mt-1 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  <Clock className="h-3 w-3" /> {s.targetDate}
+                <div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--fg-2)]">
+                  <Clock className="h-3 w-3 stroke-[1.5]" /> {s.targetDate}
                 </div>
               )}
-              <div className="mt-1 flex items-center justify-between text-xs">
-                <span className="text-zinc-500 dark:text-zinc-400">{s.topicCount} topics</span>
+              <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                <span className="text-[var(--fg-2)]">{s.topicCount} topics</span>
                 <span
-                  className="font-medium"
-                  style={{ color: s.avgProgress === 100 ? "#10b981" : s.avgProgress > 50 ? "#f59e0b" : "#ef4444" }}
+                  className="font-medium font-mono text-[11px]"
+                  style={{ color: s.avgProgress === 100 ? "var(--success)" : s.avgProgress > 50 ? "var(--accent)" : "var(--warning)" }}
                 >
                   {s.avgProgress}%
                 </span>
               </div>
-              <div className="mt-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <div className="mt-1 h-1 rounded-full bg-[var(--bg-2)] overflow-hidden">
                 <div
-                  className="h-1.5 rounded-full transition-all"
+                  className="h-full rounded-full transition-all"
                   style={{
                     width: `${s.avgProgress}%`,
-                    background: s.avgProgress === 100 ? "#10b981" : s.avgProgress > 50 ? "#f59e0b" : "#ef4444",
+                    background: s.avgProgress === 100 ? "var(--success)" : "var(--accent)",
                   }}
                 />
               </div>
             </button>
           ))}
           {state.subjects.length === 0 && (
-            <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">No subjects yet</p>
+            <p className="py-8 text-center text-[var(--text-xs)] text-[var(--fg-2)]">No subjects yet</p>
           )}
         </div>
 
         {/* Topics + logs */}
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden">
           {state.selectedSubject ? (
             <>
-              <div className="flex items-center justify-between">
+              {/* Subject Banner Card */}
+              <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] bg-[var(--bg-1)] border border-[var(--border)]">
                 <div>
-                  <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{state.selectedSubject.name}</h2>
-                  {state.selectedSubject.targetDate && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Target: {state.selectedSubject.targetDate} · {totalStudyHrs}h studied
-                    </p>
-                  )}
+                  <h2 className="text-[var(--text-md)] font-semibold text-[var(--fg-0)]">
+                    {state.selectedSubject.name}
+                  </h2>
+                  <div className="flex items-center gap-3 text-[11px] text-[var(--fg-2)] mt-0.5">
+                    {state.selectedSubject.targetDate && (
+                      <span>Target: {state.selectedSubject.targetDate}</span>
+                    )}
+                    <span>&middot;</span>
+                    <span>{totalStudyHrs}h total study logged</span>
+                    <span>&middot;</span>
+                    <span>{state.topics.length} topics tracked</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Button variant="secondary" onClick={() => setShowLogModal(true)}>
-                    <Clock className="mr-1 h-4 w-4" /> Log Study
+                    <Clock className="mr-1 h-3.5 w-3.5" /> Log Study
                   </Button>
                   <Button variant="primary" onClick={() => setShowTopicModal(true)}>
-                    <Plus className="mr-1 h-4 w-4" /> Add Topic
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Add Topic
                   </Button>
                 </div>
               </div>
 
-              <div className="flex flex-1 gap-4 overflow-hidden">
+              <div className="flex flex-1 gap-4 overflow-hidden min-h-0">
                 {/* Topics list */}
-                <div className="flex-1 overflow-y-auto">
-                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Topics ({state.topics.length})
-                  </h3>
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                  <div className="flex items-center justify-between pb-1 text-[11px] font-medium uppercase tracking-wider text-[var(--fg-2)]">
+                    <span>Topics ({state.topics.length})</span>
+                    <span>Mastery Rating</span>
+                  </div>
                   {state.topics.map((t) => (
                     <div
                       key={t.id}
-                      className={`mb-2 rounded-lg border p-3 ${
+                      className={`p-3 rounded-[var(--radius-sm)] border transition-all ${
                         state.selectedTopic?.id === t.id
-                          ? "border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/40"
-                          : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+                          ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                          : "border-[var(--border)] bg-[var(--bg-1)] hover:border-[var(--border-strong)]"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">{t.name}</span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">{t.dueDate ?? "No due date"}</span>
+                        <span className="font-medium text-[var(--text-sm)] text-[var(--fg-0)]">{t.name}</span>
+                        <span className="text-[11px] text-[var(--fg-2)]">{t.dueDate ? `Due: ${t.dueDate}` : "No deadline"}</span>
                       </div>
-                      <div className="mt-2 flex items-center gap-2">
+                      <div className="mt-2.5 flex items-center gap-3">
                         <input
                           type="range"
                           min={0}
                           max={100}
                           value={t.progressPct}
                           onChange={(e) => {
-                            // Optimistic update
                             const newPct = Number(e.target.value);
                             setState((s) => ({
                               ...s,
                               topics: s.topics.map((top) =>
-                                top.id === t.id ? { ...top, progressPct: newPct } : top,
+                                top.id === t.id ? { ...top, progressPct: newPct } : top
                               ),
                             }));
                           }}
-                          className="flex-1"
+                          className="flex-1 accent-[var(--accent)] cursor-pointer"
                         />
-                        <span className="w-8 text-right text-xs font-medium text-zinc-700 dark:text-zinc-300">{t.progressPct}%</span>
+                        <span className="w-9 text-right font-mono text-[11px] font-medium text-[var(--fg-1)]">
+                          {t.progressPct}%
+                        </span>
                       </div>
-                      <div className="mt-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div className="mt-1.5 h-1 rounded-full bg-[var(--bg-inset)] overflow-hidden">
                         <div
-                          className="h-1.5 rounded-full bg-blue-500 transition-all"
-                          style={{ width: `${t.progressPct}%` }}
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${t.progressPct}%`,
+                            background: t.progressPct === 100 ? "var(--success)" : "var(--accent)",
+                          }}
                         />
                       </div>
                       {t.logCount > 0 && (
-                        <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t.logCount} study sessions</p>
+                        <p className="mt-1.5 text-[10px] text-[var(--fg-2)]">{t.logCount} study sessions logged</p>
                       )}
                     </div>
                   ))}
                   {state.topics.length === 0 && (
-                    <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
-                      No topics — add one to get started
-                    </p>
+                    <div className="p-8 text-center rounded-[var(--radius-md)] border border-dashed border-[var(--border)] text-[var(--text-xs)] text-[var(--fg-2)]">
+                      No topics added yet. Click &quot;Add Topic&quot; to outline your syllabus.
+                    </div>
                   )}
                 </div>
 
                 {/* Study logs */}
-                <div className="w-56 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
-                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <div className="w-60 overflow-y-auto rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] p-3 shrink-0">
+                  <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-[var(--fg-2)]">
                     Recent Logs
                   </h3>
                   {state.logs.slice(0, 10).map((log) => (
-                    <div key={log.id} className="mb-2 border-b border-zinc-100 dark:border-zinc-800 pb-2 last:border-0">
-                      <div className="flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-300">
-                        <Clock className="h-3 w-3" />
-                        <span>{log.durationMin}min</span>
+                    <div key={log.id} className="mb-2.5 pb-2 border-b border-[var(--border-subtle)] last:border-0">
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--fg-1)]">
+                        <Clock className="h-3 w-3 text-[var(--accent)] stroke-[1.5]" />
+                        <span>{log.durationMin} minutes</span>
                       </div>
                       {log.note && (
-                        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{log.note}</p>
+                        <p className="truncate text-[11px] text-[var(--fg-2)] mt-0.5">{log.note}</p>
                       )}
-                      <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <p className="text-[10px] text-[var(--fg-3)] mt-0.5">
                         {new Date(log.startedAt).toLocaleDateString()}
                       </p>
                     </div>
                   ))}
                   {state.logs.length === 0 && (
-                    <p className="py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">No study logs yet</p>
+                    <p className="py-6 text-center text-[var(--text-xs)] text-[var(--fg-2)]">No study logs yet</p>
                   )}
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center text-zinc-400 dark:text-zinc-500">
+            <div className="flex flex-1 items-center justify-center text-[var(--fg-2)]">
               <div className="text-center">
-                <BookOpen className="mx-auto h-10 w-10 opacity-30" />
-                <p className="mt-2 text-sm">Select a subject to view topics</p>
+                <BookOpen className="mx-auto h-8 w-8 text-[var(--fg-3)] stroke-[1.5]" />
+                <p className="mt-2 text-[var(--text-sm)]">Select a subject from the left panel</p>
               </div>
             </div>
           )}

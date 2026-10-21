@@ -29,7 +29,7 @@ interface WorkflowCanvasProps {
   initialWorkflows: Workflow[];
 }
 
-const NODE_META: Record<WorkflowNodeType, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; badge: string }> = {
+const NODE_META: Partial<Record<WorkflowNodeType, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; badge: string }>> = {
   trigger_schedule: { label: "Schedule Trigger", icon: Clock, color: "border-amber-500/60 bg-amber-950/20 text-amber-400", badge: "Trigger" },
   trigger_manual: { label: "Manual Trigger", icon: Play, color: "border-amber-500/60 bg-amber-950/20 text-amber-400", badge: "Trigger" },
   trigger_webhook: { label: "Webhook Trigger", icon: Globe, color: "border-amber-500/60 bg-amber-950/20 text-amber-400", badge: "Trigger" },
@@ -222,7 +222,12 @@ export function WorkflowCanvas({ initialWorkflows }: WorkflowCanvasProps) {
         {/* Nodes Layer */}
         <div className="relative z-10 w-full h-full min-w-[1300px] min-h-[450px]">
           {nodes.map((node) => {
-            const meta = NODE_META[node.type] || NODE_META.ai_script;
+            const meta = NODE_META[node.type] || NODE_META.ai_script || {
+              label: node.name,
+              icon: Sparkles,
+              color: "border-zinc-500",
+              badge: "Task",
+            };
             const Icon = meta.icon;
             const isSelected = selectedNode?.id === node.id;
 

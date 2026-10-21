@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     name: body.name,
     description: body.description || "",
     category: body.category || "automation",
+    status: body.status || "active",
     nodes: body.nodes || [],
     edges: body.edges || [],
     createdAt: body.createdAt || Date.now(),

@@ -1,15 +1,51 @@
+/**
+ * Phryvos-K9 Workflow Engine & Visual Canvas Types
+ * Clean, general-purpose local automation, AI multi-agent orchestration, and vault pipelines.
+ */
+
+export type WorkflowNodeCategory =
+  | "Trigger"
+  | "AI & Agents"
+  | "Vault & Data"
+  | "Logic & Flow"
+  | "Integrations";
+
 export type WorkflowNodeType =
+  // Triggers
   | "trigger_schedule"
   | "trigger_webhook"
+  | "trigger_vault_event"
+  | "trigger_telegram"
   | "trigger_manual"
+  // AI & Agents
+  | "ai_prompt"
+  | "ai_structured_json"
+  | "ai_agent_delegate"
+  | "ai_summarize"
+  | "ai_embedding_search"
   | "ai_script"
   | "ai_video_gen"
   | "ai_tts_voice"
+  // Vault & Data
+  | "vault_read_file"
+  | "vault_write_file"
+  | "vault_task_create"
+  | "vault_exam_log"
+  | "vault_memory_save"
+  // Logic & Flow
+  | "logic_condition"
+  | "logic_loop"
+  | "logic_approval"
+  | "logic_code_sandbox"
   | "ffmpeg_stitch"
-  | "youtube_publish"
-  | "telegram_notify"
   | "bash_script"
-  | "web_scrape";
+  | "web_scrape"
+  // Integrations
+  | "http_request"
+  | "telegram_send"
+  | "telegram_notify"
+  | "youtube_publish"
+  | "mcp_tool_call";
 
 export interface WorkflowNode {
   id: string;
@@ -34,7 +70,8 @@ export interface Workflow {
   id: string;
   name: string;
   description: string;
-  category: "video" | "social" | "devops" | "automation";
+  category: "study" | "vault" | "agents" | "automation" | "video" | "social" | "devops" | string;
+  status?: "active" | "draft" | "paused";
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   createdAt: number;
@@ -43,208 +80,192 @@ export interface Workflow {
 
 export const BUILTIN_WORKFLOW_TEMPLATES: Workflow[] = [
   {
-    id: "ai-video-youtube-autopilot",
-    name: "🎬 AI Video & YouTube Auto-Publisher",
-    description: "Generates trending video script, synthesizes voiceover, renders video with FFmpeg, and auto-uploads to YouTube with Telegram alert.",
-    category: "video",
+    id: "autonomous-study-curator",
+    name: "Autonomous Study & Exam Curator",
+    description: "Evaluates upcoming exam topics, generates targeted spaced-repetition notes, updates mastery rating, and sends a daily morning brief.",
+    category: "study",
+    status: "active",
     createdAt: Date.now(),
     updatedAt: Date.now(),
     nodes: [
       {
         id: "node_trigger",
         type: "trigger_schedule",
-        name: "⏰ Daily 10 AM Schedule",
-        position: { x: 50, y: 150 },
-        config: { cron: "0 10 * * *", intervalDesc: "Daily at 10:00 AM" },
+        name: "Morning 07:00 AM Cron",
+        position: { x: 60, y: 180 },
+        config: { cron: "0 7 * * *", interval: "Every morning at 7:00 AM" },
       },
       {
-        id: "node_script",
-        type: "ai_script",
-        name: "🧠 Viral Shorts Script Writer",
-        position: { x: 300, y: 150 },
+        id: "node_read_topics",
+        type: "vault_read_file",
+        name: "Read JEE Syllabus Matrix",
+        position: { x: 340, y: 180 },
+        config: { path: "/exams/syllabus-targets.json" },
+      },
+      {
+        id: "node_ai_curator",
+        type: "ai_prompt",
+        name: "Curate Spaced Repetition Cards",
+        position: { x: 620, y: 180 },
         config: {
-          prompt: "Write a high-retention 45-second YouTube Shorts script about trending AI breakthroughs. Structure with: Hook (3s), 3 surprising facts (35s), CTA (7s).",
-          targetLengthSec: 45,
+          systemPrompt: "You are an expert tutor. Given exam topics and mastery levels, generate 5 challenging conceptual questions with Socratic hints.",
+          model: "gemini-2.5-flash",
+          temperature: 0.3,
         },
       },
       {
-        id: "node_tts",
-        type: "ai_tts_voice",
-        name: "🎙️ Edge-TTS Voiceover Generator",
-        position: { x: 580, y: 60 },
-        config: {
-          voice: "en-US-ChristopherNeural",
-          rate: "+5%",
-          inputSource: "node_script",
-        },
+        id: "node_save_vault",
+        type: "vault_write_file",
+        name: "Write Daily Review Note",
+        position: { x: 920, y: 100 },
+        config: { path: "/vault/study/daily-review.md", append: false },
       },
       {
-        id: "node_video_gen",
-        type: "ai_video_gen",
-        name: "🎥 AI Video Generator (Kling / Runway API)",
-        position: { x: 580, y: 250 },
-        config: {
-          platform: "kling_api",
-          aspectRatio: "9:16",
-          style: "hyper-realistic cinematic",
-          inputSource: "node_script",
-        },
-      },
-      {
-        id: "node_ffmpeg",
-        type: "ffmpeg_stitch",
-        name: "🎬 FFmpeg Video & Audio Stitcher",
-        position: { x: 860, y: 150 },
-        config: {
-          resolution: "1080x1920",
-          addCaptions: true,
-          burnSubtitles: true,
-          audioSource: "node_tts",
-          videoSource: "node_video_gen",
-        },
-      },
-      {
-        id: "node_youtube",
-        type: "youtube_publish",
-        name: "📺 YouTube Auto-Uploader",
-        position: { x: 1140, y: 80 },
-        config: {
-          privacyStatus: "public",
-          category: "Science & Technology",
-          tags: ["#shorts", "#ai", "#tech", "#innovation"],
-          videoSource: "node_ffmpeg",
-        },
-      },
-      {
-        id: "node_telegram",
-        type: "telegram_notify",
-        name: "📱 Telegram Broadcast Alert",
-        position: { x: 1140, y: 240 },
-        config: {
-          message: "🚀 Video successfully generated and published to YouTube! Title: {{nodes.node_script.output.title}}",
-          includePreview: true,
-        },
+        id: "node_telegram_brief",
+        type: "telegram_send",
+        name: "Dispatch Morning Telegram Brief",
+        position: { x: 920, y: 260 },
+        config: { channel: "Saved Messages", includeSummary: true },
       },
     ],
     edges: [
-      { id: "e1", source: "node_trigger", target: "node_script" },
-      { id: "e2", source: "node_script", target: "node_tts" },
-      { id: "e3", source: "node_script", target: "node_video_gen" },
-      { id: "e4", source: "node_tts", target: "node_ffmpeg" },
-      { id: "e5", source: "node_video_gen", target: "node_ffmpeg" },
-      { id: "e6", source: "node_ffmpeg", target: "node_youtube" },
-      { id: "e7", source: "node_ffmpeg", target: "node_telegram" },
+      { id: "e1", source: "node_trigger", target: "node_read_topics" },
+      { id: "e2", source: "node_read_topics", target: "node_ai_curator" },
+      { id: "e3", source: "node_ai_curator", target: "node_save_vault" },
+      { id: "e4", source: "node_ai_curator", target: "node_telegram_brief" },
     ],
   },
   {
-    id: "channel-maintenance-autopilot",
-    name: "🤖 24/7 Channel Maintenance & Auto-Reply",
-    description: "Monitors YouTube comments, auto-generates helpful replies, tracks retention analytics, and reports to Telegram.",
-    category: "social",
+    id: "vault-knowledge-ingestion",
+    name: "Vault Knowledge Ingestion & Graph Linker",
+    description: "Monitors new markdown documents, extracts [[wiki-links]] and tags, calculates conceptual backlinks, and updates the knowledge graph.",
+    category: "vault",
+    status: "active",
     createdAt: Date.now(),
     updatedAt: Date.now(),
     nodes: [
       {
-        id: "m_trigger",
-        type: "trigger_schedule",
-        name: "⏰ Every 3 Hours Check",
-        position: { x: 50, y: 120 },
-        config: { cron: "0 */3 * * *", intervalDesc: "Every 3 Hours" },
+        id: "node_watch",
+        type: "trigger_vault_event",
+        name: "Vault File Created / Modified",
+        position: { x: 60, y: 160 },
+        config: { folder: "/vault/notes", extensions: [".md", ".txt"] },
       },
       {
-        id: "m_scrape",
-        type: "web_scrape",
-        name: "📥 Fetch Recent YouTube Comments",
-        position: { x: 300, y: 120 },
-        config: { action: "fetch_unreplied_comments", maxResults: 20 },
+        id: "node_extract",
+        type: "ai_structured_json",
+        name: "Extract Entities & [[Links]]",
+        position: { x: 340, y: 160 },
+        config: { schema: "{ tags: string[], links: string[], summary: string }" },
       },
       {
-        id: "m_reply_ai",
-        type: "ai_script",
-        name: "💬 AI Engagement & Reply Drafter",
-        position: { x: 560, y: 120 },
-        config: {
-          prompt: "Analyze user comments. Draft polite, enthusiastic, engaging replies for positive comments, and helpful answers for tech questions. Flag spam.",
-        },
+        id: "node_sandbox_graph",
+        type: "logic_code_sandbox",
+        name: "Compute DAG Backlinks",
+        position: { x: 620, y: 160 },
+        config: { runtime: "javascript", sandboxTimeoutMs: 2000 },
       },
       {
-        id: "m_notify",
-        type: "telegram_notify",
-        name: "📱 Telegram Daily Channel Brief",
-        position: { x: 820, y: 120 },
-        config: {
-          message: "📊 Channel Maintenance Pass Done: Replied to {{nodes.m_reply_ai.output.replyCount}} comments. Flagged {{nodes.m_reply_ai.output.spamCount}} spam.",
-        },
+        id: "node_update_memory",
+        type: "vault_memory_save",
+        name: "Store Persistent Memory Key",
+        position: { x: 900, y: 160 },
+        config: { category: "knowledge-graph" },
       },
     ],
     edges: [
-      { id: "me1", source: "m_trigger", target: "m_scrape" },
-      { id: "me2", source: "m_scrape", target: "m_reply_ai" },
-      { id: "me3", source: "m_reply_ai", target: "m_notify" },
+      { id: "e1", source: "node_watch", target: "node_extract" },
+      { id: "e2", source: "node_extract", target: "node_sandbox_graph" },
+      { id: "e3", source: "node_sandbox_graph", target: "node_update_memory" },
     ],
   },
   {
-    id: "web-repurpose-shorts",
-    name: "🌐 URL/Blog to Video Repurposer",
-    description: "Takes any article, blog post, or tweet link, extracts key insights, creates a video montage, and schedules publishing.",
-    category: "automation",
+    id: "multi-agent-research",
+    name: "Multi-Agent Deep Research Pipeline",
+    description: "Takes complex user research queries, decomposes them into sub-questions, executes parallel web & vault queries, and synthesizes a verified report.",
+    category: "agents",
+    status: "draft",
     createdAt: Date.now(),
     updatedAt: Date.now(),
     nodes: [
       {
-        id: "w_trigger",
+        id: "node_trigger_query",
         type: "trigger_manual",
-        name: "⚡ Manual URL Trigger",
-        position: { x: 50, y: 140 },
-        config: { inputLabel: "Target Article / Tweet URL" },
+        name: "Manual Research Prompt",
+        position: { x: 60, y: 180 },
+        config: { prompt: "Research quantum error correction advances" },
       },
       {
-        id: "w_reach",
-        type: "web_scrape",
-        name: "🌐 Agent-Reach Scraper",
-        position: { x: 300, y: 140 },
-        config: { url: "{{input.url}}" },
+        id: "node_decompose",
+        type: "ai_prompt",
+        name: "Query Decomposition Agent",
+        position: { x: 340, y: 180 },
+        config: { systemPrompt: "Break this research goal into 3 orthogonal sub-questions." },
       },
       {
-        id: "w_reformat",
-        type: "ai_script",
-        name: "🧠 60s Video Script Transformer",
-        position: { x: 560, y: 140 },
-        config: {
-          prompt: "Turn this scraped article into an addictive 60-second video script with visual prompts.",
-        },
+        id: "node_delegate_web",
+        type: "ai_agent_delegate",
+        name: "Web Investigator Agent",
+        position: { x: 620, y: 90 },
+        config: { agentRole: "Web Researcher", maxTools: 5 },
       },
       {
-        id: "w_voice",
-        type: "ai_tts_voice",
-        name: "🎙️ Voiceover Audio",
-        position: { x: 820, y: 70 },
-        config: { voice: "en-US-GuyNeural" },
+        id: "node_delegate_vault",
+        type: "ai_embedding_search",
+        name: "Vault Semantic Vector Search",
+        position: { x: 620, y: 270 },
+        config: { topK: 5, threshold: 0.75 },
       },
       {
-        id: "w_stitch",
-        type: "ffmpeg_stitch",
-        name: "🎬 Local FFmpeg Assembly",
-        position: { x: 820, y: 220 },
-        config: { resolution: "1080x1920" },
-      },
-      {
-        id: "w_alert",
-        type: "telegram_notify",
-        name: "📱 Telegram Review & Approve",
-        position: { x: 1080, y: 140 },
-        config: {
-          message: "🎬 Repurposed video ready for review: {{nodes.w_stitch.output.filePath}}",
-        },
+        id: "node_synthesize",
+        type: "ai_prompt",
+        name: "Report Synthesizer Agent",
+        position: { x: 920, y: 180 },
+        config: { format: "markdown", includeCitations: true },
       },
     ],
     edges: [
-      { id: "we1", source: "w_trigger", target: "w_reach" },
-      { id: "we2", source: "w_reach", target: "w_reformat" },
-      { id: "we3", source: "w_reformat", target: "w_voice" },
-      { id: "we4", source: "w_reformat", target: "w_stitch" },
-      { id: "we5", source: "w_voice", target: "w_stitch" },
-      { id: "we6", source: "w_stitch", target: "w_alert" },
+      { id: "e1", source: "node_trigger_query", target: "node_decompose" },
+      { id: "e2", source: "node_decompose", target: "node_delegate_web" },
+      { id: "e3", source: "node_decompose", target: "node_delegate_vault" },
+      { id: "e4", source: "node_delegate_web", target: "node_synthesize" },
+      { id: "e5", source: "node_delegate_vault", target: "node_synthesize" },
+    ],
+  },
+  {
+    id: "webhook-task-dispatcher",
+    name: "Webhook Incident & Task Ingestion",
+    description: "Receives external webhooks, runs validation, evaluates priority, and creates a tracked task on the Kanban board with time estimates.",
+    category: "automation",
+    status: "active",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    nodes: [
+      {
+        id: "node_wh",
+        type: "trigger_webhook",
+        name: "Inbound HTTP Webhook",
+        position: { x: 60, y: 160 },
+        config: { path: "/api/workflows/webhook/ingest", auth: "bearer-token" },
+      },
+      {
+        id: "node_condition",
+        type: "logic_condition",
+        name: "Is Priority High?",
+        position: { x: 340, y: 160 },
+        config: { field: "priority", operator: "equals", value: "high" },
+      },
+      {
+        id: "node_task",
+        type: "vault_task_create",
+        name: "Create Project Task",
+        position: { x: 620, y: 160 },
+        config: { projectId: "ops", column: "To Do" },
+      },
+    ],
+    edges: [
+      { id: "e1", source: "node_wh", target: "node_condition" },
+      { id: "e2", source: "node_condition", target: "node_task" },
     ],
   },
 ];

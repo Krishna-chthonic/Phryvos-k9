@@ -40,6 +40,9 @@ export function getDb(): Database.Database {
     db.pragma("busy_timeout = 5000");
     db.pragma("mmap_size = 268435456");
     db.pragma("foreign_keys = ON");
+    db.pragma("secure_delete = ON");
+    db.pragma("auto_vacuum = INCREMENTAL");
+    db.pragma("synchronous = NORMAL");
     runDeterministicMigrations(db);
     g.__phryvosDb = db;
     g.__phryvosDbPath = p;
@@ -59,6 +62,9 @@ export function initDb(dbPath: string): Database.Database {
   db.pragma("busy_timeout = 5000");
   db.pragma("mmap_size = 268435456");
   db.pragma("foreign_keys = ON");
+  db.pragma("secure_delete = ON");
+  db.pragma("auto_vacuum = INCREMENTAL");
+  db.pragma("synchronous = NORMAL");
   runDeterministicMigrations(db);
   return db;
 }

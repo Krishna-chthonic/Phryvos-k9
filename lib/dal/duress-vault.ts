@@ -243,7 +243,7 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
     cookieStore.set(SESSION_COOKIE, decoyToken, {
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "strict",
       maxAge: 5 * 60,
       path: "/",
     });
@@ -270,7 +270,7 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
     cookieStore.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "strict",
       maxAge: autoLockMinutes * 60,
       path: "/",
     });

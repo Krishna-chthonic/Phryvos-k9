@@ -81,4 +81,53 @@ describe("Audit Verification: Security Fixes", () => {
     assert.strictEqual(isSafeSubpath(baseWorkspace, "/root/etc"), false);
     assert.strictEqual(isSafeSubpath(baseWorkspace, "/etc/passwd"), false);
   });
+
+  it("AAD envelope encryption protects against silent ciphertext substitution", () => {
+    const { gcmEncrypt, gcmDecrypt } = require("../lib/crypto/envelope.ts");
+    const key = Buffer.alloc(32, 7);
+    const plaintext = Buffer.from("Sensitive file secret");
+    const fileIdAad = "file-id-12345";
+    const swappedAad = "file-id-67890";
+
+    const blob = gcmEncrypt(key, plaintext, fileIdAad);
+    const decrypted = gcmDecrypt(key, blob, fileIdAad);
+    assert.strictEqual(decrypted.toString("utf8"), "Sensitive file secret");
+
+    // Attempting to decrypt under swapped file ID / metadata must fail authentication
+    assert.throws(() => {
+      gcmDecrypt(key, blob, swappedAad);
+    }, /Unsupported state or unable to authenticate data|auth/i);
+  });
+
+  it("Node sandbox blocks prototype climbing and host process access", () => {
+    const { runSandboxedJs } = require("../lib/agent/code-runner.ts");
+    const escapeAttempt1 = "return ({}).constructor.constructor('return process')()";
+    const res1 = runSandboxedJs(escapeAttempt1);
+    assert.strictEqual(res1.success, false);
+    assert.ok(res1.error?.includes("Security Exception"));
+
+    const escapeAttempt2 = "return __proto__";
+    const res2 = runSandboxedJs(escapeAttempt2);
+    assert.strictEqual(res2.success, false);
+    assert.ok(res2.error?.includes("Security Exception"));
+  });
+
+  it("CSRF defense rejects cross-site mutating requests", () => {
+    const { assertCsrfSafe } = require("../server/vault-guard.ts");
+
+    // Safe GET
+    assert.doesNotThrow(() => {
+      assertCsrfSafe(new Request("https://vault.local/api/files", { method: "GET" }));
+    });
+
+    // Cross-site POST must throw
+    assert.throws(() => {
+      assertCsrfSafe(
+        new Request("https://vault.local/api/files", {
+          method: "POST",
+          headers: { "sec-fetch-site": "cross-site" },
+        })
+      );
+    }, /Cross-site request forgery blocked/);
+  });
 });

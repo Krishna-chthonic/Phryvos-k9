@@ -67,6 +67,7 @@ export function runDataQuery(sql: string): unknown[] {
   const ro = new Database(vaultDbPath(), { readonly: true, fileMustExist: true });
   try {
     ro.pragma("busy_timeout = 5000");
+    ro.pragma("query_only = ON");
     const rows = ro.prepare(safe).all();
     return rows as unknown[];
   } finally {

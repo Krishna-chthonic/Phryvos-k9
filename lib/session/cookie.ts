@@ -1,8 +1,8 @@
-/** Cookie options for the vault session (httpOnly; Secure in production). */
+/** Cookie options for the vault session (httpOnly; Secure in production; SameSite strict for CSRF prevention). */
 export function sessionCookieOptions(ttlMs: number) {
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
+    sameSite: "strict" as const,
     path: "/",
     secure: process.env.NODE_ENV === "production",
     maxAge: Math.max(1, Math.floor(ttlMs / 1000)),
@@ -13,7 +13,7 @@ export function sessionCookieOptions(ttlMs: number) {
 export function sessionCookieClearOptions() {
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
+    sameSite: "strict" as const,
     path: "/",
     maxAge: 0,
   };

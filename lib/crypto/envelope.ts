@@ -14,16 +14,22 @@ export interface GcmBlob {
   tag: Buffer;
 }
 
-export function gcmEncrypt(key: Buffer, plain: Buffer): GcmBlob {
+export function gcmEncrypt(key: Buffer, plain: Buffer, aad?: Buffer | string): GcmBlob {
   const nonce = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", key, nonce);
+  if (aad) {
+    c.setAAD(Buffer.isBuffer(aad) ? aad : Buffer.from(aad, "utf8"));
+  }
   const enc = Buffer.concat([c.update(plain), c.final()]);
   return { enc, nonce, tag: c.getAuthTag() };
 }
 
-export function gcmDecrypt(key: Buffer, blob: GcmBlob): Buffer {
+export function gcmDecrypt(key: Buffer, blob: GcmBlob, aad?: Buffer | string): Buffer {
   const d = createDecipheriv("aes-256-gcm", key, blob.nonce);
   d.setAuthTag(blob.tag);
+  if (aad) {
+    d.setAAD(Buffer.isBuffer(aad) ? aad : Buffer.from(aad, "utf8"));
+  }
   return Buffer.concat([d.update(blob.enc), d.final()]);
 }
 

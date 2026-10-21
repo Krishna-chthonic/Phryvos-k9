@@ -43,6 +43,16 @@
 
 ---
 
+## 🔒 Data Privacy & AI Provider Boundaries
+
+- **100% Local Vault Storage:** Your files, notes, database records (`data/vault.db`), version histories, and settings stay strictly on your local disk.
+- **Zero Telemetry:** Phryvos contains no background analytics, cloud tracking, or developer telemetry pings.
+- **AI Processing Boundary:**
+  - **Local Models (Ollama, LocalAI):** All inference, prompts, and `@file` context stay completely within your local machine with zero external data egress.
+  - **Remote Cloud Models (OpenAI, Anthropic, OpenRouter):** When you configure remote API keys, messages and explicitly referenced file excerpts are sent via HTTPS directly from your machine to that provider's API. No intermediate developer relays exist.
+
+---
+
 ## ⚡ Quick Start
 
 ### 1. One-Line Install (Recommended)

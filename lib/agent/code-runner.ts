@@ -27,6 +27,34 @@ export function runSandboxedJs(
   const start = Date.now();
   const logs: string[] = [];
 
+  // Pre-flight sandbox security screening to block prototype escape vectors
+  const blockedPatterns = [
+    /\bconstructor\b/,
+    /\b__proto__\b/,
+    /\bprototype\b/,
+    /\bprocess\b/,
+    /\bglobal\b/,
+    /\bglobalThis\b/,
+    /\brequire\b/,
+    /\bimport\b/,
+    /\bFunction\b/,
+    /\beval\b/,
+    /\bReflect\b/,
+    /\bProxy\b/,
+    /\bWebAssembly\b/,
+  ];
+
+  for (const pattern of blockedPatterns) {
+    if (pattern.test(code)) {
+      return {
+        success: false,
+        output: "",
+        error: `Security Exception: Access to restricted identifier (${pattern.source}) is prohibited in the sandbox.`,
+        durationMs: Date.now() - start,
+      };
+    }
+  }
+
   const sandbox: Record<string, unknown> = {
     console: {
       log: (...args: unknown[]) => {

@@ -28,6 +28,33 @@ export interface VaultContext {
 }
 
 /**
+ * CSRF Defense: For state-changing operations, ensure requests originate
+ * strictly from the same origin and reject cross-site forged calls.
+ */
+export function assertCsrfSafe(req: Request): void {
+  const method = req.method.toUpperCase();
+  if (["GET", "HEAD", "OPTIONS"].includes(method)) return;
+
+  const secFetchSite = req.headers.get("sec-fetch-site");
+  if (secFetchSite && secFetchSite !== "same-origin" && secFetchSite !== "none") {
+    throw new VaultAuthError(403, "csrf_detected", "Cross-site request forgery blocked.");
+  }
+
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("host");
+  if (origin && host) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host) {
+        throw new VaultAuthError(403, "csrf_detected", "Origin header does not match Host.");
+      }
+    } catch {
+      throw new VaultAuthError(403, "csrf_detected", "Invalid Origin header.");
+    }
+  }
+}
+
+/**
  * Guard every vault API route: resolves the in-memory session → master key.
  * 401 = no session cookie; 503 = session expired/missing (vault locked).
  * Also refreshes the sliding idle-lock window on every request.

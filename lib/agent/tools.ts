@@ -96,6 +96,7 @@ import {
   dryRunOrcaMerge,
   mergeAndPruneOrcaWorktree,
 } from "@/lib/orca/orca-engine";
+import { paperclipEngine } from "@/lib/paperclip/paperclip-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1561,6 +1562,74 @@ async function toolOrcaMergeWorktree(_ctx: VaultCtx, a: { name: string; baseBran
     return res.message;
   } catch (err) {
     return `Orca merge error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- paperclip (virtual AI company & governance)
+
+function toolPaperclipOrgChart(_ctx: VaultCtx) {
+  try {
+    const company = paperclipEngine.getState();
+    const memberLines = company.members.map((m) => {
+      const reports = m.reportsTo ? ` (reports to ${company.members.find((r) => r.id === m.reportsTo)?.name || m.reportsTo})` : "";
+      return `• ${m.avatar} ${m.name} — ${m.title} [${m.department} | ${m.tier}]${reports} · Status: ${m.status.toUpperCase()}`;
+    });
+    return `${company.companyName} — Virtual AI Org Chart:\n${memberLines.join("\n")}`;
+  } catch (err) {
+    return `Paperclip org error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolPaperclipBudgetStatus(_ctx: VaultCtx, a: { memberId?: string }) {
+  try {
+    const company = paperclipEngine.getState();
+    if (a.memberId) {
+      const b = company.budgets[a.memberId];
+      if (!b) return `No budget profile for ${a.memberId}`;
+      const m = company.members.find((mem) => mem.id === a.memberId);
+      return `Budget for ${m?.name || a.memberId}:
+• Daily Spend: $${b.spentTodayUsd.toFixed(2)} / $${b.dailyCapUsd.toFixed(2)} (${b.tokensUsedToday.toLocaleString()} tokens)
+• Monthly Spend: $${b.spentMonthUsd.toFixed(2)} / $${b.monthlyCapUsd.toFixed(2)}
+• Hard-Stop Enabled: ${b.hardStopEnabled ? "YES 🚨" : "NO"}
+• Status: ${m?.isHardStopped ? "HARD-STOPPED 🛑" : "ACTIVE 🟢"}`;
+    }
+
+    const rows = company.members.map((m) => {
+      const b = company.budgets[m.id];
+      return `• ${m.name}: $${b?.spentTodayUsd.toFixed(2) || "0.00"} / $${b?.dailyCapUsd.toFixed(2) || "0.00"} (Month: $${b?.spentMonthUsd.toFixed(2) || "0.00"}) ${m.isHardStopped ? "🛑 HARD-STOPPED" : "🟢 ACTIVE"}`;
+    });
+    return `Company Spend Summary (Month: $${company.totalSpendMonthUsd.toFixed(2)} / $${company.monthlyCompanyCapUsd.toFixed(2)}):\n${rows.join("\n")}`;
+  } catch (err) {
+    return `Paperclip budget error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolPaperclipRunStandup(_ctx: VaultCtx) {
+  try {
+    const session = paperclipEngine.runStandup();
+    const details = session.entries.map((e) => `• [${e.department}] ${e.memberName}:\n  Done: ${e.yesterdayAccomplished.join("; ")}\n  Next: ${e.todayPlanned.join("; ")}${e.blockers.length > 0 ? `\n  Blockers: ${e.blockers.join("; ")}` : ""}`).join("\n\n");
+    return `🏁 Autonomous Standup (${session.dateStr}):\n${session.executiveBriefing}\n\n${details}`;
+  } catch (err) {
+    return `Paperclip standup error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolPaperclipGovernanceQueue(_ctx: VaultCtx) {
+  try {
+    const queue = paperclipEngine.getState().pendingApprovals.filter((a) => a.status === "pending");
+    if (queue.length === 0) return "Governance Queue: No pending high-risk approval requests.";
+    return `Pending Governance Approvals (${queue.length}):\n` + queue.map((a) => `• [#${a.id}] ${a.riskLevel.toUpperCase()} RISK: ${a.requesterName} requests "${a.actionType}"\n  Reason: ${a.reason}\n  Submitted: ${new Date(a.createdAt).toLocaleTimeString()}`).join("\n\n");
+  } catch (err) {
+    return `Paperclip governance queue error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolPaperclipApproveAction(_ctx: VaultCtx, a: { id: string; decision: "approved" | "rejected"; reason?: string }) {
+  try {
+    const res = paperclipEngine.resolveApproval(a.id, a.decision, a.reason ? `Supervisor (${a.reason})` : "Supervisor");
+    return res.message;
+  } catch (err) {
+    return `Paperclip approve error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3161,6 +3230,72 @@ export function ensureAgentTools(): void {
       baseBranch: z.string().optional(),
       squash: z.boolean().optional(),
       prune: z.boolean().optional(),
+    }),
+  );
+
+  // ---------------------------------------------------------------- paperclip org & governance tools
+
+  reg(
+    "paperclip_org_chart",
+    "Inspect the virtual AI company organization chart, departments, agent hierarchy, and reporting lines.",
+    P("paperclip_org_chart", "Get virtual AI org chart", {}),
+    (c) => toolPaperclipOrgChart(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "paperclip_budget_status",
+    "Retrieve token/USD expenditure tracking, daily/monthly budget caps, and emergency hard-stop status for agents.",
+    P(
+      "paperclip_budget_status",
+      "Inspect agent budget and hard-stops",
+      {},
+      { memberId: { type: "string", description: "Member ID to inspect (omit for company overview)" } },
+    ),
+    (c, a) => toolPaperclipBudgetStatus(c, a),
+    false,
+    z.object({
+      memberId: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "paperclip_run_standup",
+    "Trigger the autonomous daily standup routine for the AI coworker fleet and synthesize an executive briefing.",
+    P("paperclip_run_standup", "Execute daily standup routine", {}),
+    (c) => toolPaperclipRunStandup(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "paperclip_governance_queue",
+    "List pending human-in-the-loop governance approval requests for high-risk actions (e.g. bash commands, git merge, file purge).",
+    P("paperclip_governance_queue", "List pending governance approvals", {}),
+    (c) => toolPaperclipGovernanceQueue(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "paperclip_approve_action",
+    "Approve or reject a gated governance request in the approval queue.",
+    P(
+      "paperclip_approve_action",
+      "Resolve governance approval",
+      {
+        id: { type: "string", description: "Approval request ID" },
+        decision: { type: "string", description: "'approved' | 'rejected'" },
+      },
+      { reason: { type: "string", description: "Supervisor review note" } },
+    ),
+    (c, a) => toolPaperclipApproveAction(c, a),
+    false,
+    z.object({
+      id: z.string(),
+      decision: z.enum(["approved", "rejected"]),
+      reason: z.string().optional(),
     }),
   );
 }

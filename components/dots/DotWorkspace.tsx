@@ -22,6 +22,7 @@ import { DotSpacesPanel } from "./DotSpacesPanel";
 import { DotTasksPanel } from "./DotTasksPanel";
 import { RecipesPanel } from "./RecipesPanel";
 import { SwarmCoordinatorPanel } from "./SwarmCoordinatorPanel";
+import { PaperclipOrgPanel } from "./PaperclipOrgPanel";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
@@ -66,7 +67,7 @@ export function DotWorkspace({
   onSelectProvider,
   onSelectModel,
 }: DotWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "recipes" | "swarm" | "computer" | "spaces" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "recipes" | "swarm" | "paperclip" | "computer" | "spaces" | "settings">("chat");
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -227,6 +228,19 @@ export function DotWorkspace({
           >
             <span className="text-xs">🐝</span>
             <span className="hidden sm:inline">Swarm</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("paperclip")}
+            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
+              activeTab === "paperclip"
+                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+            title="Paperclip Virtual AI Organization & Budgets"
+          >
+            <span className="text-xs">📎</span>
+            <span className="hidden sm:inline">Org & Cost</span>
           </button>
 
           <button
@@ -420,6 +434,8 @@ export function DotWorkspace({
         {activeTab === "recipes" && <RecipesPanel dot={dot} />}
 
         {activeTab === "swarm" && <SwarmCoordinatorPanel dot={dot} />}
+
+        {activeTab === "paperclip" && <PaperclipOrgPanel />}
 
         {activeTab === "computer" && <DotComputerPanel dot={dot} />}
 

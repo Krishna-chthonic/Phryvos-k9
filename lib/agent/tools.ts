@@ -89,6 +89,13 @@ import { aipexBridge } from "@/lib/browser/aipex-bridge";
 import { browserSkill } from "@/lib/browser/browserskill-engine";
 import { hybridDigUpSearch, indexVaultForDigUp, getDigUpStats } from "@/lib/search/digup-engine";
 import { swarmEngine, type SwarmTopology } from "@/lib/swarm/swarm-engine";
+import {
+  getOrcaFleet,
+  createOrcaWorktree,
+  getOrcaWorktreeDiff,
+  dryRunOrcaMerge,
+  mergeAndPruneOrcaWorktree,
+} from "@/lib/orca/orca-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1491,6 +1498,69 @@ Blackboard Entries: ${state.blackboard.length}
 Consensus Ballots: ${state.ballots.length}`;
   } catch (err) {
     return `Swarm status error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- orca (git worktree fleet & merge engine)
+
+async function toolOrcaFleetList(_ctx: VaultCtx, a: { baseBranch?: string }) {
+  try {
+    const fleet = await getOrcaFleet(a.baseBranch || "main");
+    if (fleet.length === 0) return "Orca Fleet: No active isolated agent worktrees currently spawned.";
+    return fleet
+      .map(
+        (w) =>
+          `• [${w.name}] branch: ${w.branch} | mergeability: ${w.mergeability} | head: ${w.headCommit} | ahead: ${w.commitsAhead}, behind: ${w.commitsBehind} | ${w.isClean ? "clean" : `dirty (${w.uncommittedFiles.length} uncommitted)`}` +
+          (w.conflictingFiles && w.conflictingFiles.length > 0 ? `\n  ⚠️ Conflicts: ${w.conflictingFiles.join(", ")}` : ""),
+      )
+      .join("\n");
+  } catch (err) {
+    return `Orca fleet list error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolOrcaCreateWorktree(_ctx: VaultCtx, a: { name: string; baseBranch?: string }) {
+  try {
+    const res = await createOrcaWorktree(a.name, a.baseBranch || "main");
+    if (!res.success) return `Orca worktree creation failed: ${res.message}`;
+    return `Created isolated agent worktree [${res.worktree?.name}] on branch [${res.worktree?.branch}] at ${res.worktree?.worktreePath}`;
+  } catch (err) {
+    return `Orca create worktree error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolOrcaWorktreeDiff(_ctx: VaultCtx, a: { name: string; baseBranch?: string }) {
+  try {
+    const res = await getOrcaWorktreeDiff(a.name, a.baseBranch || "main");
+    if (res.files.length === 0) return `Orca Diff: No changes between agent worktree "${a.name}" and "${a.baseBranch || "main"}".`;
+    const fileList = res.files.map((f) => `  - [${f.status.toUpperCase()}] ${f.filePath} (+${f.insertions}/-${f.deletions})`).join("\n");
+    return `Orca 3-Way Diff for "${a.name}":\nSummary: ${res.summary.filesChanged} files changed (+${res.summary.insertions}/-${res.summary.deletions})\nFiles:\n${fileList}`;
+  } catch (err) {
+    return `Orca diff error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolOrcaDryRunMerge(_ctx: VaultCtx, a: { name: string; baseBranch?: string }) {
+  try {
+    const res = await dryRunOrcaMerge(a.name, a.baseBranch || "main");
+    if (res.canMergeCleanly) {
+      return `Orca Dry-Run: CLEAN MERGE POSSIBLE ✅\nTarget: ${res.targetBranch} -> ${res.baseBranch}\nMerge-base: ${res.mergeBaseCommit}\n${res.recommendedResolution}`;
+    }
+    return `Orca Dry-Run: CONFLICT DETECTED ⚠️ (${res.conflictCount} conflicting files)\nFiles:\n${res.conflictingFiles.map((f) => `  - ${f}`).join("\n")}\nRecommendation: ${res.recommendedResolution}`;
+  } catch (err) {
+    return `Orca dry-run error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolOrcaMergeWorktree(_ctx: VaultCtx, a: { name: string; baseBranch?: string; squash?: boolean; prune?: boolean }) {
+  try {
+    const res = await mergeAndPruneOrcaWorktree(a.name, a.baseBranch || "main", {
+      squash: a.squash,
+      prune: a.prune,
+    });
+    return res.message;
+  } catch (err) {
+    return `Orca merge error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3000,6 +3070,98 @@ export function ensureAgentTools(): void {
     (c) => toolSwarmStatus(c),
     false,
     z.object({}),
+  );
+
+  // ---------------------------------------------------------------- orca fleet tools
+
+  reg(
+    "orca_fleet_list",
+    "List all active isolated agent git worktrees in the repository, their branches, head commits, ahead/behind counts, and mergeability status.",
+    P(
+      "orca_fleet_list",
+      "List active agent worktrees",
+      {},
+      { baseBranch: { type: "string", description: "Target base branch (default: 'main')" } },
+    ),
+    (c, a) => toolOrcaFleetList(c, a),
+    false,
+    z.object({
+      baseBranch: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "orca_create_worktree",
+    "Create an isolated git worktree for an AI agent or task to prevent working directory conflicts.",
+    P(
+      "orca_create_worktree",
+      "Create isolated agent worktree",
+      { name: { type: "string", description: "Agent or task slug name" } },
+      { baseBranch: { type: "string", description: "Base branch to branch off (default: 'main')" } },
+    ),
+    (c, a) => toolOrcaCreateWorktree(c, a),
+    false,
+    z.object({
+      name: z.string(),
+      baseBranch: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "orca_worktree_diff",
+    "Inspect 3-way structured git diff between an agent worktree branch and base branch (modified files, line insertions, deletions, patches).",
+    P(
+      "orca_worktree_diff",
+      "Inspect agent worktree diff",
+      { name: { type: "string", description: "Worktree name" } },
+      { baseBranch: { type: "string", description: "Target base branch (default: 'main')" } },
+    ),
+    (c, a) => toolOrcaWorktreeDiff(c, a),
+    false,
+    z.object({
+      name: z.string(),
+      baseBranch: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "orca_dry_run_merge",
+    "Simulate a merge between an agent worktree branch and base branch to detect conflicts before executing the merge.",
+    P(
+      "orca_dry_run_merge",
+      "Simulate worktree merge",
+      { name: { type: "string", description: "Worktree name" } },
+      { baseBranch: { type: "string", description: "Target base branch (default: 'main')" } },
+    ),
+    (c, a) => toolOrcaDryRunMerge(c, a),
+    false,
+    z.object({
+      name: z.string(),
+      baseBranch: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "orca_merge_worktree",
+    "Atomically merge an agent worktree branch into base branch with automated conflict verification and worktree pruning.",
+    P(
+      "orca_merge_worktree",
+      "Merge agent worktree into base",
+      { name: { type: "string", description: "Worktree name" } },
+      {
+        baseBranch: { type: "string", description: "Target base branch (default: 'main')" } ,
+        squash: { type: "boolean", description: "Squash commits into single commit" },
+        prune: { type: "boolean", description: "Prune worktree directory after merge (default: true)" },
+      },
+    ),
+    (c, a) => toolOrcaMergeWorktree(c, a),
+    false,
+    z.object({
+      name: z.string(),
+      baseBranch: z.string().optional(),
+      squash: z.boolean().optional(),
+      prune: z.boolean().optional(),
+    }),
   );
 }
 

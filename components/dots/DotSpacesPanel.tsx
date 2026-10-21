@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, BookOpen, Trash2, Sparkles, Check, FileText, ArrowRight } from "lucide-react";
+import { Plus, BookOpen, Trash2, Sparkles, Check, FileText, ArrowRight, GitBranch } from "lucide-react";
 import type { DotDto, DotSpaceDto } from "@/lib/dots-service";
+import { OrcaFleetPanel } from "./OrcaFleetPanel";
 
 interface DotSpacesPanelProps {
   dot: DotDto;
@@ -17,6 +18,7 @@ export function DotSpacesPanel({
   onRefreshSpaces,
   onAskDotToReview,
 }: DotSpacesPanelProps) {
+  const [viewMode, setViewMode] = useState<"spaces" | "orca">("spaces");
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
     spaces.length > 0 ? spaces[0].id : null
   );
@@ -101,9 +103,44 @@ export function DotSpacesPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950">
-      {/* Left Sub-sidebar: Document Pages */}
-      <div className="w-56 sm:w-64 shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-950">
+      {/* Sub-navigation bar: Spaces vs Orca Fleet */}
+      <div className="shrink-0 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-4 py-2 bg-zinc-50/80 dark:bg-zinc-900/40">
+        <div className="flex items-center gap-1.5 bg-zinc-200/60 dark:bg-zinc-800/80 p-0.5 rounded-lg text-xs">
+          <button
+            onClick={() => setViewMode("spaces")}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition cursor-pointer ${
+              viewMode === "spaces"
+                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-700 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5 text-emerald-500" />
+            <span>Docs & Spaces ({spaces.length})</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode("orca")}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition cursor-pointer ${
+              viewMode === "orca"
+                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-700 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+          >
+            <GitBranch className="h-3.5 w-3.5 text-indigo-500" />
+            <span>Orca Worktree Fleet</span>
+          </button>
+        </div>
+      </div>
+
+      {viewMode === "orca" ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <OrcaFleetPanel />
+        </div>
+      ) : (
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Left Sub-sidebar: Document Pages */}
+          <div className="w-56 sm:w-64 shrink-0 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40">
         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3.5 py-3">
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -220,5 +257,7 @@ export function DotSpacesPanel({
         )}
       </div>
     </div>
+  )}
+</div>
   );
 }

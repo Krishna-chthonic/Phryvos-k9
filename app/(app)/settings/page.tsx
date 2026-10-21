@@ -14,6 +14,7 @@ import { ThemePanel } from "@/components/settings/ThemePanel";
 import { MemoryPanel } from "@/components/settings/MemoryPanel";
 import { SyncPanel } from "@/components/settings/SyncPanel";
 import { McpPanel } from "@/components/settings/McpPanel";
+import { AIPexBridgePanel } from "@/components/settings/AIPexBridgePanel";
 import { TelegramGatewayPanel } from "@/components/settings/TelegramGatewayPanel";
 import { AgentReachPanel } from "@/components/settings/AgentReachPanel";
 import { FreeModelsPanel } from "@/components/settings/FreeModelsPanel";
@@ -40,6 +41,7 @@ export default function SettingsPage() {
         <MemoryPanel />
         <SyncPanel />
         <McpPanel />
+        <AIPexBridgePanel />
         <PluginManagerPanel />
         <FreeModelsPanel />
         <ProvidersPanel />

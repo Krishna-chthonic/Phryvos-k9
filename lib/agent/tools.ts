@@ -85,6 +85,7 @@ import {
   runAgentReachDoctor,
 } from "./reach-service";
 import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
+import { aipexBridge } from "@/lib/browser/aipex-bridge";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1282,6 +1283,62 @@ function toolBrowserSnapshot(_ctx: VaultCtx, a: { sessionId?: string }) {
   }
 }
 
+// ---------------------------------------------------------------- AIPex Real Browser Bridge (AIPexStudio/AIPex)
+
+function toolAipexListTabs(_ctx: VaultCtx) {
+  try {
+    const tabs = aipexBridge.listTabs();
+    return JSON.stringify({ count: tabs.length, tabs });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolAipexSwitchTab(_ctx: VaultCtx, a: { tabId: number }) {
+  try {
+    const tab = aipexBridge.switchTab(a.tabId);
+    return JSON.stringify({ success: true, activeTab: tab });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolAipexNewTab(_ctx: VaultCtx, a: { url: string; title?: string }) {
+  try {
+    const tab = aipexBridge.newTab(a.url, a.title);
+    return JSON.stringify({ success: true, createdTab: tab });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolAipexCloseTab(_ctx: VaultCtx, a: { tabId: number }) {
+  try {
+    const ok = aipexBridge.closeTab(a.tabId);
+    return JSON.stringify({ success: ok });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function toolAipexEvalScript(_ctx: VaultCtx, a: { tabId: number; code: string }) {
+  try {
+    const res = await aipexBridge.evalScript(a.tabId, a.code);
+    return JSON.stringify(res);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function toolAipexStatus(_ctx: VaultCtx) {
+  try {
+    const s = aipexBridge.getStatus();
+    return JSON.stringify(s);
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -2461,6 +2518,92 @@ export function ensureAgentTools(): void {
     z.object({
       sessionId: z.string().optional(),
     }),
+  );
+
+  // ---------------------------------------------------------------- AIPex Real Browser Automation Tools (AIPexStudio/AIPex)
+
+  reg(
+    "aipex_list_tabs",
+    "List all open tabs in the user's connected real browser with their tab IDs, titles, active states, and URLs.",
+    P("aipex_list_tabs", "List open browser tabs", {}),
+    (c) => toolAipexListTabs(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "aipex_switch_tab",
+    "Switch the active browser focus to a specific tab by tab ID.",
+    P(
+      "aipex_switch_tab",
+      "Switch active browser tab",
+      { tabId: { type: "number", description: "Target tab ID" } },
+    ),
+    (c, a) => toolAipexSwitchTab(c, a),
+    false,
+    z.object({
+      tabId: z.number(),
+    }),
+  );
+
+  reg(
+    "aipex_new_tab",
+    "Open a new tab in the connected browser with a specific URL.",
+    P(
+      "aipex_new_tab",
+      "Open new tab",
+      { url: { type: "string", description: "URL to open" } },
+      { title: { type: "string", description: "Optional title for tab" } },
+    ),
+    (c, a) => toolAipexNewTab(c, a),
+    false,
+    z.object({
+      url: z.string(),
+      title: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "aipex_close_tab",
+    "Close an open browser tab by tab ID.",
+    P(
+      "aipex_close_tab",
+      "Close browser tab",
+      { tabId: { type: "number", description: "Tab ID to close" } },
+    ),
+    (c, a) => toolAipexCloseTab(c, a),
+    false,
+    z.object({
+      tabId: z.number(),
+    }),
+  );
+
+  reg(
+    "aipex_eval_script",
+    "Evaluate a JavaScript expression directly in the context of an open browser tab (e.g. document.title, window.location.href, DOM extraction).",
+    P(
+      "aipex_eval_script",
+      "Evaluate script in tab",
+      {
+        tabId: { type: "number", description: "Target tab ID" },
+        code: { type: "string", description: "JavaScript code string" },
+      },
+    ),
+    (c, a) => toolAipexEvalScript(c, a),
+    false,
+    z.object({
+      tabId: z.number(),
+      code: z.string(),
+    }),
+  );
+
+  reg(
+    "aipex_status",
+    "Get current AIPex real browser bridge status, connected clients, active tab, and MCP server endpoint.",
+    P("aipex_status", "Get AIPex bridge status", {}),
+    (c) => toolAipexStatus(c),
+    false,
+    z.object({}),
   );
 }
 

@@ -38,10 +38,10 @@ export default function SetupPage() {
 
     try {
       const res = await authApi.setup(password, duressPin || undefined);
-      if (res.success) {
+      if (res.ok || res.success || res.state === "unlocked") {
         // Unlock immediately with the new password
         const unlockRes = await authApi.unlock(password);
-        if (unlockRes.success) {
+        if (unlockRes.ok || unlockRes.success || unlockRes.state === "unlocked") {
           keyring.setUnlocked(true);
           router.replace("/chat");
         } else {

@@ -126,12 +126,12 @@ export async function apiFetch<T>(
 export const authApi = {
   status: () => apiFetch<{ state: "locked" | "unlocked" | "setup_required"; auto_lock_minutes?: number }>("/api/auth/status"),
   setup: (password: string, duressPin?: string) =>
-    apiFetch<{ success: boolean }>("/api/auth/setup", {
+    apiFetch<{ ok?: boolean; success?: boolean; state: string }>("/api/auth/setup", {
       method: "POST",
       body: JSON.stringify({ password, duressPin }),
     }),
   unlock: (password: string) =>
-    apiFetch<{ success: boolean; state: string; isDuress?: boolean }>("/api/auth/unlock", {
+    apiFetch<{ ok?: boolean; success?: boolean; state: string; isDuress?: boolean; vaultType?: string }>("/api/auth/unlock", {
       method: "POST",
       body: JSON.stringify({ password }),
     }),

@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(ttlMs));
-    return Response.json({ ok: true, state: "unlocked" });
+    return Response.json({ ok: true, success: true, state: "unlocked" });
   } catch (e) {
     if (e instanceof ThrottleError) {
       return Response.json(

@@ -38,7 +38,7 @@ export default function UnlockPage() {
 
     try {
       const res = await authApi.unlock(password);
-      if (res.success) {
+      if (res.ok || res.success || res.state === "unlocked") {
         keyring.setUnlocked(true);
         router.replace("/chat");
       } else {

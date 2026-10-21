@@ -14,6 +14,7 @@ import {
   ThrottleError,
   assertNotThrottled,
   recordFail,
+  clearThrottle,
 } from "@/lib/session/throttle";
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
 
     // Duress PIN Check (if set up)
     if (verifyDuressPin(passwordAttempt)) {
+      clearThrottle("unlock");
       await initDecoyVault();
       const decoyKey = randomBytes(32);
       const decoyToken = createSession(decoyKey, 5 * 60_000, "decoy");
@@ -73,6 +75,7 @@ export async function POST(req: Request) {
       cookieStore.set(SESSION_COOKIE, decoyToken, sessionCookieOptions(5 * 60_000));
       return Response.json({
         ok: true,
+        success: true,
         state: "unlocked",
         vaultType: "decoy",
         warning: "Duress mode: Decoy vault active",
@@ -89,6 +92,9 @@ export async function POST(req: Request) {
       );
     }
 
+    // Password verified: clear throttle strikes
+    clearThrottle("unlock");
+
     // Derive the real AES-256 master key for decrypting files
     const { masterKey } = splitMaster(derive(passwordAttempt, row.salt));
     const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
@@ -103,6 +109,7 @@ export async function POST(req: Request) {
     cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(ttlMs));
     return Response.json({
       ok: true,
+      success: true,
       state: "unlocked",
       vaultType: "real",
       auto_lock_minutes: autoLockMinutes,

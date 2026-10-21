@@ -22,6 +22,7 @@ import { defaultProvider, createLlmClient } from "./providers-service";
 import { runAgentTurn } from "./agent/loop";
 import { ensureAgentTools } from "./agent/tools";
 import { enhancePromptWithEcc } from "./ai/prompts/ecc-instincts";
+import { telegramGateway } from "./gateway/telegram-gateway";
 import type { UnifiedMessage } from "./ai/types";
 
 type GlobalRunner = { __phryvosDotRunner?: DotRunner };
@@ -196,11 +197,23 @@ export class DotRunner {
         `${dot.name} (AI Coworker)`,
         `Completed: ${task.prompt.slice(0, 45)}${task.prompt.length > 45 ? "…" : ""}`
       );
+
+      // OpenClaw Proactive Push to Telegram
+      void telegramGateway.broadcast(
+        db,
+        `✔ *${dot.name} (${dot.role}) Completed Task*\n\n📋 *Task:* ${task.prompt}\n\n${finalReport.slice(0, 250)}${finalReport.length > 250 ? "…" : ""}`
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[DotRunner] Task ${task.id} failed:`, msg);
       completeDotTask(db, task.id, { error: msg });
       updateDot(ctx, dot.id, { status: "idle" });
+
+      // OpenClaw Push Alert on Failure
+      void telegramGateway.broadcast(
+        db,
+        `⚠️ *${dot.name} Task Failed*\n\n📋 *Task:* ${task.prompt}\n\n*Error:* ${msg}`
+      );
 
       appendDotMessage(ctx, dot.id, {
         role: "assistant",

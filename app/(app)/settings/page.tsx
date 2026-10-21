@@ -14,6 +14,7 @@ import { ThemePanel } from "@/components/settings/ThemePanel";
 import { MemoryPanel } from "@/components/settings/MemoryPanel";
 import { SyncPanel } from "@/components/settings/SyncPanel";
 import { McpPanel } from "@/components/settings/McpPanel";
+import { TelegramGatewayPanel } from "@/components/settings/TelegramGatewayPanel";
 import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -31,6 +32,7 @@ export default function SettingsPage() {
         </div>
 
         <ThemePanel />
+        <TelegramGatewayPanel />
         <MemoryPanel />
         <SyncPanel />
         <McpPanel />

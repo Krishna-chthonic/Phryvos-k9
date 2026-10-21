@@ -33,6 +33,7 @@ import {
   reachTweet,
   runAgentReachDoctor,
 } from "@/lib/agent/reach-service";
+import { swarmEngine, type SwarmTopology } from "@/lib/swarm/swarm-engine";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
 export interface GatewayConfig {
@@ -394,6 +395,8 @@ export class TelegramGatewayService {
         `• \`/tasks\` — View active Kanban company tasks\n` +
         `• \`/worktrees\` — Inspect active Git worktrees\n` +
         `• \`/status\` — System status & active dots\n` +
+        `• \`/swarm <goal>\` — Spawn multi-agent swarm team\n` +
+        `• \`/swarm_status\` — Live swarm topology & blackboard\n` +
         `• \`/recipes\` — Browse Goose automation workflows\n` +
         `• \`/recipe <id>\` — Execute multi-step automation recipe\n` +
         `• \`/reach <url>\` — Extract clean web/YT/Reddit/X content\n` +
@@ -602,6 +605,63 @@ export class TelegramGatewayService {
           chat_id: chatId,
           text: `❌ Reach failed: ${reachErr instanceof Error ? reachErr.message : String(reachErr)}`,
         });
+      }
+      return;
+    }
+
+    // /swarm_status
+    if (rawText === "/swarm_status") {
+      const state = swarmEngine.getState();
+      const completedTasks = state.tasks.filter((t) => t.status === "completed").length;
+      const recentBb = state.blackboard.slice(0, 3).map((e) => `• [${e.topic}] _<${e.authorRole}>:_ ${e.content}`).join("\n");
+
+      const msg = `🐝 *Ruflo Swarm Status: [${state.status.toUpperCase()}]*\n\n` +
+        `• *Topology:* \`${state.topology.toUpperCase()}\`\n` +
+        `• *Goal:* ${state.goal}\n` +
+        `• *Tasks:* ${completedTasks}/${state.tasks.length} completed\n` +
+        `• *Active Agents:* ${state.agents.map((a) => `${a.avatar} ${a.name}`).join(", ")}\n` +
+        `• *Consensus Ballots:* ${state.ballots.length}\n\n` +
+        `*Recent Blackboard:*\n${recentBb || "_(none)_"}`;
+
+      await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: msg, parse_mode: "Markdown" });
+      return;
+    }
+
+    // /swarm [topology] <goal>
+    if (rawText.startsWith("/swarm ")) {
+      const remainder = rawText.substring(7).trim();
+      const parts = remainder.split(/\s+/);
+      let topology: SwarmTopology = "hierarchical";
+      let goal = remainder;
+
+      if (["mesh", "hierarchical", "star", "consensus"].includes(parts[0].toLowerCase())) {
+        topology = parts[0].toLowerCase() as SwarmTopology;
+        goal = parts.slice(1).join(" ");
+      }
+
+      if (!goal) {
+        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /swarm [mesh|hierarchical|star|consensus] <goal>" });
+        return;
+      }
+
+      const session = swarmEngine.spawn(goal, topology);
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `🚀 *Swarm Spawned [${topology.toUpperCase()}]*\n\n*Goal:* "${goal}"\n*Agents Assigned:* ${session.agents.length}\n*Tasks Scheduled:* ${session.tasks.length}\n\n_Auto-executing swarm steps..._`,
+        parse_mode: "Markdown",
+      });
+
+      // Run up to 4 autonomous steps
+      for (let i = 0; i < 4; i++) {
+        const stepRes = await swarmEngine.step(ctx);
+        if (stepRes.session.status === "completed") {
+          await callTelegramApi(botToken, "sendMessage", {
+            chat_id: chatId,
+            text: `🏁 *Swarm Completed Successfully!*\n\n${stepRes.stepMessage}`,
+            parse_mode: "Markdown",
+          });
+          break;
+        }
       }
       return;
     }

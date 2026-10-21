@@ -88,6 +88,7 @@ import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
 import { aipexBridge } from "@/lib/browser/aipex-bridge";
 import { browserSkill } from "@/lib/browser/browserskill-engine";
 import { hybridDigUpSearch, indexVaultForDigUp, getDigUpStats } from "@/lib/search/digup-engine";
+import { swarmEngine, type SwarmTopology } from "@/lib/swarm/swarm-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1422,6 +1423,74 @@ async function toolDigUpStats(ctx: VaultCtx) {
     return `DigUp Code Engine Stats:\n- Files Indexed: ${stats.totalFiles}\n- Total Chunks: ${stats.totalChunks}\n- Total Tokens: ${stats.totalTokens}\n- Last Updated: ${new Date(stats.lastIndexedAt || Date.now()).toISOString()}`;
   } catch (err) {
     return `DigUp stats error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- swarm (ruflo multi-agent orchestration)
+
+function toolSwarmSpawn(_ctx: VaultCtx, a: { goal: string; topology?: "mesh" | "hierarchical" | "star" | "consensus" }) {
+  try {
+    const session = swarmEngine.spawn(a.goal, a.topology || "hierarchical");
+    return `Swarm spawned [${session.topology.toUpperCase()}] for goal: "${session.goal}". Agents active: ${session.agents.map((ag) => `${ag.name} (${ag.role})`).join(", ")}. Tasks scheduled: ${session.tasks.length}.`;
+  } catch (err) {
+    return `Swarm spawn error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolSwarmStep(ctx: VaultCtx) {
+  try {
+    const res = await swarmEngine.step(ctx);
+    return `Swarm Step Result: ${res.stepMessage} (Session status: ${res.session.status.toUpperCase()})`;
+  } catch (err) {
+    return `Swarm step error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolSwarmConsensus(_ctx: VaultCtx, a: { taskId?: string; proposal: string; threshold?: number }) {
+  try {
+    const ballot = swarmEngine.conductConsensusVote(a.taskId || "ad-hoc", a.proposal, a.threshold);
+    const summary = ballot.votes.map((v) => `  - ${v.agentRole}: ${v.vote.toUpperCase()} (${(v.confidence * 100).toFixed(0)}%) - ${v.rationale}`).join("\n");
+    return `Consensus Ballot #${ballot.id}:\nOutcome: ${ballot.passed ? "PASSED ✅" : "REJECTED ❌"} (Score: ${(ballot.weightedScore * 100).toFixed(0)}%, Threshold: ${(ballot.threshold * 100).toFixed(0)}%)\nVotes:\n${summary}`;
+  } catch (err) {
+    return `Swarm consensus error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolSwarmBlackboardPost(_ctx: VaultCtx, a: { topic: string; content: string; tags?: string[] }) {
+  try {
+    const entry = swarmEngine.postBlackboard("agent-coord", a.topic, a.content, a.tags || []);
+    return `Posted to swarm blackboard under [${entry.topic}]: "${entry.content.slice(0, 100)}"`;
+  } catch (err) {
+    return `Swarm blackboard post error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolSwarmBlackboardRead(_ctx: VaultCtx, a: { topic?: string; limit?: number }) {
+  try {
+    const entries = swarmEngine.getBlackboard(a.topic ? { topic: a.topic } : undefined).slice(0, a.limit || 10);
+    if (entries.length === 0) return `Swarm blackboard is currently empty${a.topic ? ` for topic "${a.topic}"` : ""}.`;
+    return entries
+      .map((e) => `[${new Date(e.timestamp).toLocaleTimeString()}] [${e.topic.toUpperCase()}] <${e.authorRole}>: ${e.content}`)
+      .join("\n");
+  } catch (err) {
+    return `Swarm blackboard read error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolSwarmStatus(_ctx: VaultCtx) {
+  try {
+    const state = swarmEngine.getState();
+    const activeTasks = state.tasks.filter((t) => t.status === "in_progress" || t.status === "pending").length;
+    const completedTasks = state.tasks.filter((t) => t.status === "completed").length;
+    return `Swarm Status: [${state.status.toUpperCase()}]
+Topology: ${state.topology.toUpperCase()}
+Goal: ${state.goal}
+Active Agents: ${state.agents.map((a) => `${a.name} (${a.status})`).join(", ")}
+Tasks: ${completedTasks}/${state.tasks.length} completed (${activeTasks} remaining)
+Blackboard Entries: ${state.blackboard.length}
+Consensus Ballots: ${state.ballots.length}`;
+  } catch (err) {
+    return `Swarm status error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -2830,6 +2899,105 @@ export function ensureAgentTools(): void {
     "Retrieve statistics about the DigUp on-device hybrid code search index.",
     P("digup_stats", "Get DigUp index stats", {}),
     (c) => toolDigUpStats(c),
+    false,
+    z.object({}),
+  );
+
+  // ---------------------------------------------------------------- ruflo swarm tools
+
+  reg(
+    "swarm_spawn",
+    "Spawn an autonomous multi-agent swarm team with specified topology ('mesh', 'hierarchical', 'star', or 'consensus') to achieve a complex goal.",
+    P(
+      "swarm_spawn",
+      "Spawn multi-agent swarm team",
+      { goal: { type: "string", description: "Objective or problem for the swarm to solve" } },
+      { topology: { type: "string", description: "Swarm topology: 'mesh' | 'hierarchical' | 'star' | 'consensus' (default: 'hierarchical')" } },
+    ),
+    (c, a) => toolSwarmSpawn(c, a),
+    false,
+    z.object({
+      goal: z.string(),
+      topology: z.enum(["mesh", "hierarchical", "star", "consensus"]).optional(),
+    }),
+  );
+
+  reg(
+    "swarm_step",
+    "Advance the current multi-agent swarm session by one turn, executing the next pending DAG sub-task with specialized agent roles.",
+    P("swarm_step", "Execute next swarm turn", {}),
+    (c) => toolSwarmStep(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "swarm_consensus",
+    "Conduct a confidence-weighted consensus vote across all swarm agents on a proposal, draft, or deliverable.",
+    P(
+      "swarm_consensus",
+      "Conduct swarm consensus vote",
+      { proposal: { type: "string", description: "Proposal text or plan to evaluate" } },
+      {
+        taskId: { type: "string", description: "Associated task ID" },
+        threshold: { type: "number", description: "Consensus threshold score (0.0 to 1.0, default: 0.67)" },
+      },
+    ),
+    (c, a) => toolSwarmConsensus(c, a),
+    false,
+    z.object({
+      proposal: z.string(),
+      taskId: z.string().optional(),
+      threshold: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "swarm_blackboard_post",
+    "Publish an update, observation, or artifact to the shared swarm blackboard memory mesh.",
+    P(
+      "swarm_blackboard_post",
+      "Publish to swarm blackboard",
+      {
+        topic: { type: "string", description: "Topic category (e.g. 'architecture', 'security', 'finding')" },
+        content: { type: "string", description: "Message or finding text" },
+      },
+      { tags: { type: "array", description: "Keywords or tags" } },
+    ),
+    (c, a) => toolSwarmBlackboardPost(c, a),
+    false,
+    z.object({
+      topic: z.string(),
+      content: z.string(),
+      tags: z.array(z.string()).optional(),
+    }),
+  );
+
+  reg(
+    "swarm_blackboard_read",
+    "Read recent entries from the shared swarm blackboard memory mesh.",
+    P(
+      "swarm_blackboard_read",
+      "Read swarm blackboard memory",
+      {},
+      {
+        topic: { type: "string", description: "Filter by topic" },
+        limit: { type: "number", description: "Max entries (default: 10)" },
+      },
+    ),
+    (c, a) => toolSwarmBlackboardRead(c, a),
+    false,
+    z.object({
+      topic: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+  );
+
+  reg(
+    "swarm_status",
+    "Inspect the active multi-agent swarm topology, active roster, DAG task progress, and blackboard metrics.",
+    P("swarm_status", "Get swarm status", {}),
+    (c) => toolSwarmStatus(c),
     false,
     z.object({}),
   );

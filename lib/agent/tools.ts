@@ -74,6 +74,7 @@ import {
   recallReMeMemories,
   runReMeDreamCycle,
 } from "@/lib/memory/reme-service";
+import { listRecipes, executeRecipe } from "@/lib/recipes/recipe-runner";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1098,6 +1099,40 @@ async function toolReMeDream(ctx: VaultCtx) {
   }
 }
 
+// ---------------------------------------------------------------- Goose Automation Recipes (aaif-goose/goose)
+
+function toolListRecipes(ctx: VaultCtx) {
+  const list = listRecipes(ctx);
+  return JSON.stringify({
+    count: list.length,
+    recipes: list.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      category: r.category,
+      parameters: r.parameters,
+      stepCount: r.steps.length,
+    })),
+  });
+}
+
+async function toolRunRecipe(ctx: VaultCtx, a: { recipeId: string; parameters?: Record<string, string> }) {
+  try {
+    const res = await executeRecipe(ctx, a.recipeId, a.parameters || {});
+    return JSON.stringify({
+      success: res.status === "completed",
+      recipeId: res.recipeId,
+      recipeName: res.recipeName,
+      status: res.status,
+      durationSeconds: Math.round(res.totalDurationMs / 1000),
+      stepsCompleted: res.stepResults.filter((s) => s.status === "completed").length,
+      finalReport: res.finalReport,
+    });
+  } catch (err) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 // ---------------------------------------------------------------- registry
 
 let registered = false;
@@ -2047,6 +2082,38 @@ export function ensureAgentTools(): void {
     (c) => toolReMeDream(c),
     false,
     z.object({}),
+  );
+
+  // ---------------------------------------------------------------- Goose Automation Recipes (aaif-goose/goose)
+
+  reg(
+    "list_recipes",
+    "Discover all available Goose automation recipes in Phryvos-K9 (e.g. 'code-review', 'security-audit', 'test-and-fix', 'docs-sync', 'backup-verify').",
+    P("list_recipes", "List automation recipes", {}),
+    (c) => toolListRecipes(c),
+    false,
+    z.object({}),
+  );
+
+  reg(
+    "run_recipe",
+    "Execute a multi-step Goose automation recipe sequentially. Each step runs autonomously with specific tool constraints and emits an overall execution report.",
+    P(
+      "run_recipe",
+      "Run automation recipe",
+      {
+        recipeId: { type: "string", description: "Recipe ID (e.g. 'code-review', 'security-audit', 'test-and-fix', 'docs-sync')" },
+      },
+      {
+        parameters: { type: "object", description: "Optional key-value parameters to substitute in recipe step prompts" },
+      },
+    ),
+    (c, a) => toolRunRecipe(c, a),
+    false,
+    z.object({
+      recipeId: z.string(),
+      parameters: z.record(z.string(), z.string()).optional(),
+    }),
   );
 }
 

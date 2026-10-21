@@ -14,11 +14,13 @@ import {
   Menu,
   ArrowLeft,
   Clock,
+  ScrollText,
 } from "lucide-react";
 import { DotMascot } from "./DotMascot";
 import { DotComputerPanel } from "./DotComputerPanel";
 import { DotSpacesPanel } from "./DotSpacesPanel";
 import { DotTasksPanel } from "./DotTasksPanel";
+import { RecipesPanel } from "./RecipesPanel";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { AssistantBody } from "@/components/chat/AssistantBody";
 import type { DotDto, DotMessageDto, DotSpaceDto } from "@/lib/dots-service";
@@ -63,7 +65,7 @@ export function DotWorkspace({
   onSelectProvider,
   onSelectModel,
 }: DotWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "computer" | "spaces" | "settings">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "recipes" | "computer" | "spaces" | "settings">("chat");
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -198,6 +200,19 @@ export function DotWorkspace({
                 {spaces.length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("recipes")}
+            className={`flex items-center gap-1 rounded-lg px-2 sm:px-2.5 py-1 text-xs font-medium transition cursor-pointer shrink-0 ${
+              activeTab === "recipes"
+                ? "bg-white text-zinc-900 shadow-2xs font-semibold dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+            title="Goose Automation Recipes"
+          >
+            <ScrollText className="h-3.5 w-3.5 text-amber-500" />
+            <span className="hidden sm:inline">Recipes</span>
           </button>
 
           <button
@@ -387,6 +402,8 @@ export function DotWorkspace({
         )}
 
         {activeTab === "tasks" && <DotTasksPanel dot={dot} onRefreshMessages={onRefreshSpaces} />}
+
+        {activeTab === "recipes" && <RecipesPanel dot={dot} />}
 
         {activeTab === "computer" && <DotComputerPanel dot={dot} />}
 

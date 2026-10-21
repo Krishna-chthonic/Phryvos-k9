@@ -24,6 +24,7 @@ import {
   runReMeDreamCycle,
   formatMarkdownTablesForMobile,
 } from "@/lib/memory/reme-service";
+import { listRecipes, executeRecipe } from "@/lib/recipes/recipe-runner";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
 export interface GatewayConfig {
@@ -385,6 +386,8 @@ export class TelegramGatewayService {
         `• \`/tasks\` — View active Kanban company tasks\n` +
         `• \`/worktrees\` — Inspect active Git worktrees\n` +
         `• \`/status\` — System status & active dots\n` +
+        `• \`/recipes\` — Browse Goose automation workflows\n` +
+        `• \`/recipe <id>\` — Execute multi-step automation recipe\n` +
         `• \`/memorize <fact>\` — Save permanent memory to vault\n\n` +
         `*Specialist Coworkers:*\n${dotList || "• (No dots configured)"}\n\n` +
         `_Tip: Direct messages default to your personal Chat companion._`;
@@ -478,6 +481,57 @@ export class TelegramGatewayService {
         text: `🌙 *ReMe Dream Cycle Completed*\n\n• Consolidated Facts: ${dreamRes.consolidated}\n• New Vault Docs: ${dreamRes.newFiles.length}${filesMsg}`,
         parse_mode: "Markdown",
       });
+      return;
+    }
+
+    // /recipes (Goose Automation Recipes list)
+    if (rawText === "/recipes") {
+      const allRecipes = listRecipes(ctx);
+      const lines = allRecipes.map((r) => `• \`/recipe ${r.id}\` — *${r.name}* (${r.steps.length} steps)\n  _${r.description}_`);
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `📜 *Available Goose Automation Recipes (${allRecipes.length})*\n\n${lines.join("\n\n")}\n\n_Execute with: /recipe <id> [param=value]_`,
+        parse_mode: "Markdown",
+      });
+      return;
+    }
+
+    // /recipe <id> [param=value ...]
+    if (rawText.startsWith("/recipe ")) {
+      const parts = rawText.substring(8).trim().split(/\s+/);
+      const recipeId = parts[0]?.toLowerCase();
+      if (!recipeId) {
+        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /recipe <recipeId>" });
+        return;
+      }
+
+      await callTelegramApi(botToken, "sendMessage", {
+        chat_id: chatId,
+        text: `⏳ *Launching Goose Recipe:* \`${recipeId}\`\nRunning multi-step autonomous execution in background...`,
+        parse_mode: "Markdown",
+      });
+
+      // Parse optional key=value arguments
+      const params: Record<string, string> = {};
+      for (const p of parts.slice(1)) {
+        const [k, v] = p.split("=");
+        if (k && v) params[k] = v;
+      }
+
+      try {
+        const result = await executeRecipe(ctx, recipeId, params);
+        await callTelegramApi(botToken, "sendMessage", {
+          chat_id: chatId,
+          text: formatMarkdownTablesForMobile(
+            `✔ *Goose Recipe Completed: ${result.recipeName}*\n⏱ Elapsed: ${(result.totalDurationMs / 1000).toFixed(1)}s\n\n${result.finalReport.slice(0, 3000)}`,
+          ),
+        });
+      } catch (recipeErr) {
+        await callTelegramApi(botToken, "sendMessage", {
+          chat_id: chatId,
+          text: `❌ Recipe failed: ${recipeErr instanceof Error ? recipeErr.message : String(recipeErr)}`,
+        });
+      }
       return;
     }
 

@@ -97,6 +97,7 @@ import {
   mergeAndPruneOrcaWorktree,
 } from "@/lib/orca/orca-engine";
 import { paperclipEngine } from "@/lib/paperclip/paperclip-engine";
+import { ifixaiEngine } from "@/lib/audit/ifixai-engine";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1630,6 +1631,49 @@ function toolPaperclipApproveAction(_ctx: VaultCtx, a: { id: string; decision: "
     return res.message;
   } catch (err) {
     return `Paperclip approve error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// ---------------------------------------------------------------- ifixai (agent auditing & misalignment diagnostics)
+
+function toolIFixAiAuditDot(_ctx: VaultCtx, a: { dotName: string; promptContent: string }) {
+  try {
+    const res = ifixaiEngine.auditPromptOrDot(a.dotName, a.promptContent);
+    const findingsStr = res.findings.length > 0
+      ? "\nFindings:\n" + res.findings.map((f) => `• [${f.severity.toUpperCase()}] ${f.title}: ${f.description}\n  Fix: ${f.remediationAdvice}`).join("\n")
+      : "\nFindings: None. Full compliance.";
+    return `iFixAi Audit for [${a.dotName}]: Grade ${res.scorecard.letterGrade} (${res.scorecard.overallScore}%)${findingsStr}`;
+  } catch (err) {
+    return `iFixAi audit error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+async function toolIFixAiAuditVault(ctx: VaultCtx, a: { targetDir?: string }) {
+  try {
+    const res = await ifixaiEngine.scanVault(ctx, a.targetDir || "/");
+    const findingsStr = res.findings.length > 0
+      ? "\nSecurity Vulnerabilities:\n" + res.findings.map((f) => `• [${f.severity.toUpperCase()}] ${f.target}: ${f.title} (${f.evidenceSnippet})`).join("\n")
+      : "\nZero vulnerabilities detected across scanned files.";
+    return `iFixAi Vault Security Scan: Scanned ${res.scannedFiles} files. Scorecard Grade: ${res.scorecard.letterGrade} (${res.scorecard.overallScore}%)${findingsStr}`;
+  } catch (err) {
+    return `iFixAi vault audit error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+function toolIFixAiGetScorecard(_ctx: VaultCtx) {
+  try {
+    const sc = ifixaiEngine.getScorecard();
+    const categories = sc.categoryScores.map((c) => `  - ${c.name}: ${c.score}% (${c.passed ? "PASSED" : "FAILED"}, ${c.findingsCount} findings)`).join("\n");
+    return `iFixAi Security Scorecard:
+• Overall Grade: ${sc.letterGrade} (${sc.overallScore}%)
+• Timestamp: ${new Date(sc.timestamp).toLocaleString()}
+• Categories:
+${categories}
+• Active Findings: ${sc.findings.length}
+• Remediation Recommendations:
+${sc.remediationPatches.map((p) => `  • ${p}`).join("\n")}`;
+  } catch (err) {
+    return `iFixAi scorecard error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -3297,6 +3341,52 @@ export function ensureAgentTools(): void {
       decision: z.enum(["approved", "rejected"]),
       reason: z.string().optional(),
     }),
+  );
+
+  // ---------------------------------------------------------------- ifixai audit tools
+
+  reg(
+    "ifixai_audit_dot",
+    "Run independent behavioral and misalignment diagnostic audit on an agent's prompt or instructions (prompt injection, tool safety, key leaks).",
+    P(
+      "ifixai_audit_dot",
+      "Audit agent prompt for security risks",
+      {
+        dotName: { type: "string", description: "Target agent/dot name" },
+        promptContent: { type: "string", description: "Prompt text or system instructions to evaluate" },
+      },
+    ),
+    (c, a) => toolIFixAiAuditDot(c, a),
+    false,
+    z.object({
+      dotName: z.string(),
+      promptContent: z.string(),
+    }),
+  );
+
+  reg(
+    "ifixai_audit_vault",
+    "Scan vault code and documentation files for dangerous shell commands, eval patterns, and un-sanitized SQL.",
+    P(
+      "ifixai_audit_vault",
+      "Scan vault files for security vulnerabilities",
+      {},
+      { targetDir: { type: "string", description: "Directory to scan (default: '/')" } },
+    ),
+    (c, a) => toolIFixAiAuditVault(c, a),
+    false,
+    z.object({
+      targetDir: z.string().optional(),
+    }),
+  );
+
+  reg(
+    "ifixai_get_scorecard",
+    "Retrieve the latest overall security scorecard, letter grade (A+, A, B, C, F), and remediation recommendations.",
+    P("ifixai_get_scorecard", "Get security scorecard", {}),
+    (c) => toolIFixAiGetScorecard(c),
+    false,
+    z.object({}),
   );
 }
 

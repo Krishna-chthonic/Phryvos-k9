@@ -20,6 +20,7 @@ import { AgentReachPanel } from "@/components/settings/AgentReachPanel";
 import { FreeModelsPanel } from "@/components/settings/FreeModelsPanel";
 import { PluginManagerPanel } from "@/components/settings/PluginManagerPanel";
 import { DigUpPanel } from "@/components/settings/DigUpPanel";
+import { IFixAiPanel } from "@/components/settings/IFixAiPanel";
 import { Settings2 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -45,6 +46,7 @@ export default function SettingsPage() {
         <AIPexBridgePanel />
         <PluginManagerPanel />
         <DigUpPanel />
+        <IFixAiPanel />
         <FreeModelsPanel />
         <ProvidersPanel />
         <SystemPromptPanel />

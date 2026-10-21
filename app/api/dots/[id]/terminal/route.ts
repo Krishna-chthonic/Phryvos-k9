@@ -34,6 +34,17 @@ export async function POST(
     const body = await req.json();
     const { command, cwd: requestedCwd } = TerminalBodySchema.parse(body);
 
+    // Reject null byte injection
+    if (command.includes("\0")) {
+      return Response.json({
+        command,
+        stdout: "",
+        stderr: "Invalid shell command: null bytes rejected",
+        exitCode: 1,
+        cwd: dot.workingDirectory || process.cwd(),
+      });
+    }
+
     // Pre-flight safety check
     const shellCheck = lintShellCommand(command);
     if (!shellCheck.ok) {
@@ -46,16 +57,21 @@ export async function POST(
       });
     }
 
-    // Confine working directory to dot workspace sandbox
+    // Strictly confine working directory to dot workspace sandbox
     const baseWorkspace = path.resolve(dot.workingDirectory || process.cwd());
     let workingDir = baseWorkspace;
-    if (requestedCwd) {
+
+    const isSafeSubpath = (parent: string, child: string): boolean => {
+      const rel = path.relative(parent, child);
+      return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+    };
+
+    if (requestedCwd && typeof requestedCwd === "string") {
       const resolved = path.resolve(baseWorkspace, requestedCwd);
-      // Path traversal check
-      if (resolved.startsWith(baseWorkspace) && fs.existsSync(resolved)) {
+      if (isSafeSubpath(baseWorkspace, resolved) && fs.existsSync(resolved)) {
         workingDir = resolved;
-      } else if (fs.existsSync(requestedCwd) && !requestedCwd.includes("..")) {
-        workingDir = path.resolve(requestedCwd);
+      } else {
+        workingDir = baseWorkspace;
       }
     }
 
@@ -81,7 +97,7 @@ export async function POST(
     };
 
     return new Promise<Response>((resolve) => {
-      exec(command, { cwd: workingDir, env, timeout: 30_000 }, (err: any, stdout: string, stderr: string) => {
+      exec(command, { cwd: workingDir, env, timeout: 30_000, maxBuffer: 1024 * 512 }, (err: any, stdout: string, stderr: string) => {
         const exitCode = err ? (err.code ?? 1) : 0;
         const resultText = (stdout || stderr || (exitCode === 0 ? "Command succeeded (no output)" : "Command failed")).trim();
 

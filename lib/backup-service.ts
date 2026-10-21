@@ -21,8 +21,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
+import AdmZip from "adm-zip";
 import { randomBytes, createHash } from "node:crypto";
 import { derive, splitMaster, checkPassword } from "@/lib/crypto/kdf";
 import { gcmEncrypt, gcmDecrypt } from "@/lib/crypto/envelope";
@@ -98,9 +98,10 @@ export async function createExportBundle(kind: "auto" | "manual" | "export"): Pr
     );
     fs.writeFileSync(manifestPath, manifest);
 
-    execSync(`zip -j "${dest}" "${stagingDb}" "${manifestPath}"`, {
-      env: { ...process.env, PATH: `/usr/bin:/bin:${process.env.PATH ?? ""}` },
-    });
+    const zip = new AdmZip();
+    zip.addLocalFile(stagingDb, "", "vault.db");
+    zip.addLocalFile(manifestPath, "", path.basename(manifestPath));
+    zip.writeZip(dest);
   } finally {
     try {
       fs.rmSync(stagingDir, { recursive: true, force: true });
@@ -181,9 +182,16 @@ export async function restoreBackup(backupPath: string): Promise<RestoreResult> 
   let currentPath: string | null = null;
 
   try {
-    execSync(`unzip -o "${backupPath}" -d "${tmpDir}"`, {
-      env: { ...process.env, PATH: `/usr/bin:/bin:${process.env.PATH ?? ""}` },
-    });
+    const zip = new AdmZip(backupPath);
+    const zipEntries = zip.getEntries();
+    const normalizedTmp = path.resolve(tmpDir);
+    for (const entry of zipEntries) {
+      const entryTarget = path.resolve(tmpDir, entry.entryName);
+      if (!entryTarget.startsWith(normalizedTmp + path.sep) && entryTarget !== normalizedTmp) {
+        throw new Error(`Security Exception: Zip slip directory traversal detected in entry "${entry.entryName}"`);
+      }
+    }
+    zip.extractAllTo(tmpDir, true);
     let restoredDbPath = path.join(tmpDir, "vault.db");
     if (!fs.existsSync(restoredDbPath)) {
       // Check for legacy/alternative DB filename (e.g. tmp-*.db)
@@ -439,7 +447,7 @@ export async function rekeyVault(oldPassword: string, newPassword: string): Prom
 
     // --- file_versions (historical version DEKs) ---
     const versions = db.prepare(
-      "SELECT id, dek, dek_nonce, dek_tag FROM file_versions WHERE is_dir = 0 AND dek IS NOT NULL",
+      "SELECT fv.id, fv.dek, fv.dek_nonce, fv.dek_tag FROM file_versions fv INNER JOIN files f ON fv.file_id = f.id WHERE f.is_dir = 0 AND fv.dek IS NOT NULL",
     ).all() as Array<Record<string, unknown>>;
     for (const v of versions) {
       const enc = v.dek as Buffer;

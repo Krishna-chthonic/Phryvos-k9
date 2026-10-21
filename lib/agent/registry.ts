@@ -35,7 +35,7 @@ export function toolDefs(): Record<string, ToolDef> {
 
 export function toolSpecs(allowedTools?: string[]): ToolSpec[] {
   const all = [...defs.values()].map((d) => d.spec);
-  if (!allowedTools || allowedTools.length === 0) return all;
+  if (allowedTools === undefined) return all;
   const set = new Set(allowedTools);
   return all.filter((s) => set.has(s.function.name));
 }
@@ -55,13 +55,15 @@ export async function runTool(
   ctx: VaultCtx,
   allowedTools?: string[],
 ): Promise<string> {
+  // Server-side permission boundary
+  if (allowedTools !== undefined && !allowedTools.includes(name)) {
+    return `DENIED: Tool "${name}" is not enabled for this agent.${
+      allowedTools.length ? " Allowed tools: " + allowedTools.join(", ") : " No tools are enabled."
+    }`;
+  }
+
   const def = defs.get(name);
   if (!def) return `ERROR: unknown tool "${name}"`;
-
-  // Server-side permission boundary
-  if (allowedTools && allowedTools.length > 0 && !allowedTools.includes(name)) {
-    return `DENIED: Tool "${name}" is not enabled for this agent. Allowed tools: ${allowedTools.join(", ")}`;
-  }
 
   // Pre-flight safety lint (iFixAi Guardrail)
   const safety = lintToolExecution(name, args ?? {});

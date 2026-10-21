@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { vaultRoute } from "@/server/vault-guard";
+import { requireVault, vaultGuardResponse } from "@/server/vault-guard";
 import { createFreeFrontierClient } from "@/lib/ai/free-frontier-service";
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireVault();
+  } catch (err) {
+    const auth = vaultGuardResponse(err);
+    if (auth) return auth;
+    return NextResponse.json({ error: { message: "Authentication required" } }, { status: 401 });
+  }
+
   const json = await req.json().catch(() => ({}));
   const model = json.model || "deepseek-chat";
   const prompt = json.prompt || "Say hello and give a 1-sentence tip on writing clean code.";

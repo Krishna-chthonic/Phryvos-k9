@@ -16,12 +16,12 @@
  */
 import { getDb, initDb } from "@/lib/db/client";
 import { getVaultState, VaultState } from "@/lib/auth-state";
-import { createSession, destroySession, VaultSession } from "@/lib/session/store";
+import { createSession, destroySession, getSession, VaultSession } from "@/lib/session/store";
 import { VaultLockedError } from "@/lib/dal/vault-dal";
 import { checkPassword, derive, splitMaster, newSalt, KDF_ID } from "@/lib/crypto/kdf";
 import { kvGet, kvSet } from "@/lib/db/kv";
 import { cookies } from "next/headers";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual, scryptSync } from "node:crypto";
 import { SESSION_COOKIE } from "@/lib/session/store";
 
 /**
@@ -60,14 +60,36 @@ const DECOY_NOTES: Array<{ path: string; content: string }> = [
  * PIN hashing with PBKDF2 (using Node's built-in crypto for compatibility)
  * In production, would use @noble/hashes or argon2 library for Argon2id
  */
-async function hashPin(pin: string, salt: Buffer): Promise<Buffer> {
-  const { pbkdf2Sync } = await import("node:crypto");
-  return pbkdf2Sync(pin, salt, 100000, 32, "sha256");
+export function hashDuressPin(pin: string, salt: Buffer): Buffer {
+  return scryptSync(pin, salt, 32, { N: 16384, r: 8, p: 1 });
 }
 
-async function verifyPin(pin: string, hash: Buffer, salt: Buffer): Promise<boolean> {
-  const computed = await hashPin(pin, salt);
-  return timingSafeEqual(computed, hash);
+export function verifyDuressPin(pin: string): boolean {
+  const hashHex = kvGet("duress_hash");
+  const saltHex = kvGet("duress_salt");
+  if (hashHex && saltHex) {
+    try {
+      const salt = Buffer.from(saltHex, "hex");
+      const targetHash = Buffer.from(hashHex, "hex");
+      const testHash = hashDuressPin(pin, salt);
+      if (testHash.length === targetHash.length && timingSafeEqual(testHash, targetHash)) {
+        return true;
+      }
+    } catch {}
+  }
+  // Migration fallback: check legacy plaintext and migrate immediately to salted scrypt hash
+  const legacyPin = kvGet("duress_pin");
+  if (legacyPin && pin === legacyPin) {
+    const salt = randomBytes(16);
+    const hash = hashDuressPin(legacyPin, salt);
+    kvSet("duress_salt", salt.toString("hex"));
+    kvSet("duress_hash", hash.toString("hex"));
+    try {
+      getDb().prepare("DELETE FROM kv WHERE key = 'duress_pin'").run();
+    } catch {}
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -209,12 +231,11 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
     return { success: false, vaultType: "locked", error: "Auth record missing" };
   }
 
-  // Check duress PIN from kv if configured
-  const duressPin = kvGet("duress_pin");
-  if (duressPin && pin === duressPin) {
+  // Check duress PIN from hashed kv if configured
+  if (verifyDuressPin(pin)) {
     await initDecoyVault();
     const decoyKey = randomBytes(32);
-    const decoyToken = createSession(decoyKey, 5 * 60 * 1000);
+    const decoyToken = createSession(decoyKey, 5 * 60 * 1000, "decoy");
     const g = globalThis as unknown as { __phryvosSessions?: Map<string, VaultSession> };
     const session = g.__phryvosSessions?.get(decoyToken);
 
@@ -238,7 +259,7 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
     const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
 
     // Create session with real vault
-    const token = createSession(masterKey, autoLockMinutes * 60 * 1000);
+    const token = createSession(masterKey, autoLockMinutes * 60 * 1000, "real");
 
     // Get the session object from store
     const g = globalThis as unknown as { __phryvosSessions?: Map<string, VaultSession> };
@@ -286,9 +307,15 @@ export async function setupVault(
      VALUES (?, ?, ?, ?)`
   ).run(KDF_ID, salt, verifier, Date.now());
 
-  // If a duress PIN was configured, store it in kv
+  // If a duress PIN was configured, store its salted hash in kv (never plaintext)
   if (duressPin && duressPin !== masterPin) {
-    kvSet("duress_pin", duressPin);
+    const duressSalt = randomBytes(16);
+    const duressHash = hashDuressPin(duressPin, duressSalt);
+    kvSet("duress_salt", duressSalt.toString("hex"));
+    kvSet("duress_hash", duressHash.toString("hex"));
+    try {
+      getDb().prepare("DELETE FROM kv WHERE key = 'duress_pin'").run();
+    } catch {}
   }
 
   console.log("[Auth] Vault initialized with canonical scrypt master PIN" + (duressPin ? " and duress PIN" : ""));
@@ -324,16 +351,8 @@ export async function isDecoyMode(): Promise<boolean> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return false;
 
-  const g = globalThis as unknown as { __phryvosSessions?: Map<string, VaultSession> };
-  const session = g.__phryvosSessions?.get(token);
-
-  // Decoy sessions have 5 min TTL vs 15 min for real
-  if (session) {
-    const remaining = session.expiresAt - Date.now();
-    return remaining < 10 * 60 * 1000; // Less than 10 min = likely decoy
-  }
-
-  return false;
+  const session = getSession(token);
+  return session?.vaultType === "decoy";
 }
 
 /**

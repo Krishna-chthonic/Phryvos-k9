@@ -12,6 +12,7 @@ export interface VaultSession {
   token: string;
   masterKey: Buffer;
   expiresAt: number;
+  vaultType: "real" | "decoy";
 }
 
 export const SESSION_COOKIE = "phryvos_session";
@@ -32,9 +33,13 @@ const sweep = setInterval(() => {
 }, 30_000);
 sweep.unref();
 
-export function createSession(masterKey: Buffer, ttlMs: number): string {
+export function createSession(
+  masterKey: Buffer,
+  ttlMs: number,
+  vaultType: "real" | "decoy" = "real",
+): string {
   const token = randomBytes(32).toString("base64url");
-  store().set(token, { token, masterKey, expiresAt: Date.now() + ttlMs });
+  store().set(token, { token, masterKey, expiresAt: Date.now() + ttlMs, vaultType });
   return token;
 }
 

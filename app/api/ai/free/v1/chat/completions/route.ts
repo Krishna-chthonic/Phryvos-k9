@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireVault, vaultGuardResponse } from "@/server/vault-guard";
 import { createFreeFrontierClient, FREE_FRONTIER_MODELS } from "@/lib/ai/free-frontier-service";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
@@ -6,8 +7,20 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
+    await requireVault();
+  } catch (authErr) {
+    const auth = vaultGuardResponse(authErr);
+    if (auth) return auth;
+    return NextResponse.json({ error: { message: "Vault session required", type: "auth_required" } }, { status: 401 });
+  }
+
+  try {
     const body = await req.json();
     const { model = "deepseek-chat", messages = [], stream = false, temperature, max_tokens } = body;
+
+    if (!Array.isArray(messages) || messages.length > 100) {
+      return NextResponse.json({ error: { message: "Messages array must contain between 1 and 100 items", type: "invalid_request_error" } }, { status: 400 });
+    }
 
     // Convert OpenAI messages to UnifiedMessage[]
     const unifiedMessages: UnifiedMessage[] = messages.map((m: any) => ({

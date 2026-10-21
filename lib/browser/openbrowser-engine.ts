@@ -10,6 +10,8 @@
  * 5. Full agent tools & live browser viewport panel
  */
 
+import { isResolvedTargetPrivate } from "@/lib/agent/web-fetch";
+
 export interface DomElement {
   id: number;
   tag: "a" | "button" | "input" | "select" | "textarea" | "form";
@@ -72,12 +74,41 @@ export class OpenBrowserEngine {
     }
 
     try {
-      // 1. Fetch page HTML
-      const res = await fetch(targetUrl, {
-        headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
-        signal: AbortSignal.timeout(15_000),
-      });
+      // 1. SSRF protected navigation with redirect revalidation
+      let currentUrl = targetUrl;
+      let hops = 0;
+      let res: Response | null = null;
 
+      while (hops < 5) {
+        const u = new URL(currentUrl);
+        if (u.protocol !== "http:" && u.protocol !== "https:") {
+          throw new Error("SSRF Protection: Only HTTP and HTTPS protocols are allowed");
+        }
+        if (await isResolvedTargetPrivate(u.hostname)) {
+          throw new Error(`SSRF Protection: Navigation to private/internal network target (${u.hostname}) is prohibited`);
+        }
+
+        res = await fetch(currentUrl, {
+          headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+          signal: AbortSignal.timeout(15_000),
+          redirect: "manual",
+        });
+
+        if (res.status >= 300 && res.status < 400) {
+          const location = res.headers.get("location");
+          if (!location) break;
+          currentUrl = new URL(location, currentUrl).toString();
+          hops++;
+        } else {
+          break;
+        }
+      }
+
+      if (!res || !res.ok) {
+        throw new Error(`Navigation failed with HTTP status ${res?.status || "error"}`);
+      }
+
+      targetUrl = currentUrl;
       const html = await res.text();
 
       // Extract page title

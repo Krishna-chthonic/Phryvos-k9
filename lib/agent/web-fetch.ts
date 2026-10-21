@@ -60,7 +60,7 @@ function isPrivateOrLocalHost(hostname: string): boolean {
   return false;
 }
 
-async function isResolvedTargetPrivate(hostname: string): Promise<boolean> {
+export async function isResolvedTargetPrivate(hostname: string): Promise<boolean> {
   if (isPrivateOrLocalHost(hostname)) return true;
   try {
     const records = await dns.lookup(hostname, { all: true });

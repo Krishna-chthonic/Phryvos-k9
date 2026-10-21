@@ -273,11 +273,13 @@ MANDATORY NEXT STEPS:
       let blocked = false;
 
       // Server-side allowed tools check for scoped agent permissions
-      if (deps.allowedTools && deps.allowedTools.length > 0 && !deps.allowedTools.includes(tc.name)) {
+      if (deps.allowedTools !== undefined && !deps.allowedTools.includes(tc.name)) {
         blocked = true;
         approval = {
           decision: "denied",
-          detail: `DENIED: Tool "${tc.name}" is disabled for this agent. Allowed tools: ${deps.allowedTools.join(", ")}`,
+          detail: `DENIED: Tool "${tc.name}" is disabled for this agent.${
+            deps.allowedTools.length ? " Allowed tools: " + deps.allowedTools.join(", ") : " No tools are enabled."
+          }`,
         };
       }
 

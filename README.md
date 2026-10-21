@@ -10,7 +10,7 @@
 ```
 
 # Phryvos (K9)
-### 🔒 Local-First, Zero-Knowledge AI Vault & Personal Life OS
+### 🔒 Local-First, Envelope-Encrypted AI Vault & Personal Life OS
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.4-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)](https://react.dev/)
@@ -22,7 +22,7 @@
 <p align="center">
   <b>Phryvos</b> is an open-source, private-by-design personal vault that combines a conversational AI assistant with complete life tracking and file management. 
   <br />
-  <b>Zero cloud tracking. Zero developer relays. 100% of your data stays encrypted on your device.</b>
+  <b>Zero cloud tracking. Zero developer relays. 100% of your data stays locally on your device.</b>
 </p>
 
 ---
@@ -38,7 +38,7 @@
 | **🔌 Custom AI Providers** | Bring your own keys and models! Works with any OpenAI-compatible endpoint (Ollama, OpenRouter, LocalAI) plus Anthropic presets. Keys are stored encrypted with your master key. |
 | **📋 Project Tracking** | Interactive Kanban boards, Gantt charts, dependency graphs (prerequisite blockers), and live task time tracking. |
 | **🎯 Life OS Modules** | Goal tracking with milestones, Exam study planners with progress sliders & time logs, and standalone local calendar. |
-| **🛡️ Zero-Knowledge Vault** | Scrypt Key Derivation Function (KDF) + AES-256-GCM envelope encryption. Stolen DB files reveal only ciphertext. |
+| **🛡️ Local-First Vault Security** | Scrypt KDF + AES-256-GCM envelope encryption for stored files, versions, and AI provider API keys. Salted duress PIN with isolated Ghost Vault (decoy NCERT database) defense. |
 | **📦 Backup & Restore** | Encrypted full bundles (DB + blobs + manifest), automated scheduled snapshots, single-click restore, and password re-keying. |
 
 ---

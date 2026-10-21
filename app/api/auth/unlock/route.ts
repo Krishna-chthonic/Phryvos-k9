@@ -17,7 +17,7 @@ import {
 } from "@/lib/session/throttle";
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
-import { initDecoyVault } from "@/lib/dal/duress-vault";
+import { initDecoyVault, verifyDuressPin } from "@/lib/dal/duress-vault";
 import { randomBytes } from "node:crypto";
 
 const UnlockBody = z.object({
@@ -65,11 +65,10 @@ export async function POST(req: Request) {
     const passwordAttempt = parsed.data.pin || parsed.data.password;
 
     // Duress PIN Check (if set up)
-    const duressPin = kvGet("duress_pin");
-    if (duressPin && passwordAttempt === duressPin) {
+    if (verifyDuressPin(passwordAttempt)) {
       await initDecoyVault();
       const decoyKey = randomBytes(32);
-      const decoyToken = createSession(decoyKey, 5 * 60_000);
+      const decoyToken = createSession(decoyKey, 5 * 60_000, "decoy");
       const cookieStore = await cookies();
       cookieStore.set(SESSION_COOKIE, decoyToken, sessionCookieOptions(5 * 60_000));
       return Response.json({
@@ -95,7 +94,7 @@ export async function POST(req: Request) {
     const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
     const ttlMs = autoLockMinutes * 60_000;
     const now = Date.now();
-    const token = createSession(masterKey, ttlMs);
+    const token = createSession(masterKey, ttlMs, "real");
     db.prepare(
       "INSERT OR REPLACE INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)",
     ).run(token, now, now + ttlMs);

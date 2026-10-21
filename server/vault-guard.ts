@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type Database from "better-sqlite3";
 import { getDb } from "@/lib/db/client";
+import { getDecoyDb } from "@/lib/dal/duress-vault";
 import { kvGet } from "@/lib/db/kv";
 import {
   getSession,
@@ -23,6 +24,7 @@ export interface VaultContext {
   db: Database.Database;
   key: Buffer;
   token: string;
+  vaultType: "real" | "decoy";
 }
 
 /**
@@ -42,8 +44,9 @@ export async function requireVault(): Promise<VaultContext> {
   }
   const ttlMs = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30)) * 60_000;
   touchSession(token, ttlMs);
-  const db = getDb();
-  return { db, key: session.masterKey, token };
+  const vaultType = session.vaultType || "real";
+  const db = vaultType === "decoy" ? getDecoyDb() : getDb();
+  return { db, key: session.masterKey, token, vaultType };
 }
 
 export function vaultGuardResponse(e: unknown): Response | null {

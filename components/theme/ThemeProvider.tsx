@@ -51,6 +51,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setResolvedTheme(active);
 
       const root = document.documentElement;
+      root.setAttribute("data-theme", active);
       if (active === "dark") {
         root.classList.add("dark");
       } else {

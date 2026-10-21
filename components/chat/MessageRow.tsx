@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useState } from "react";
-import { Check, Copy, Pencil } from "lucide-react";
+import { Check, Copy, Pencil, Sparkles } from "lucide-react";
 import type { ChatMessageDto } from "@/lib/chat-client";
 import type { UnifiedPart } from "@/lib/ai/types";
 import { AssistantBody } from "./AssistantBody";
@@ -64,15 +64,27 @@ export const MessageRow = memo(function MessageRow({
     <div
       className={`group flex w-full ${
         user ? "justify-end" : "justify-start"
-      } px-2 sm:px-4 py-2`}
+      } px-2 sm:px-4 py-2 select-text`}
     >
       <div
         className={`relative ${
           user
-            ? "max-w-[85%] md:max-w-[75%] lg:max-w-[70%] bg-zinc-100 text-zinc-900 border border-zinc-200/80 rounded-2xl rounded-tr-xs px-4 py-3 dark:bg-zinc-800 dark:border-zinc-700/80 dark:text-zinc-100 shadow-2xs"
-            : "w-full text-zinc-900 dark:text-zinc-100 py-2.5 px-1 sm:px-2 leading-relaxed"
+            ? "max-w-[560px] bg-[var(--bg-2)] text-[var(--fg-0)] border border-[var(--border-subtle)] rounded-[14px_14px_4px_14px] px-3.5 py-2.5 shadow-none"
+            : "w-full max-w-[680px] text-[var(--fg-0)] py-2 px-1 leading-[22px]"
         }`}
       >
+        {/* Assistant Sparkle Avatar on Top */}
+        {!user && (
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-5 w-5 rounded-[var(--radius-xs)] bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
+              <Sparkles className="h-3 w-3 stroke-[1.5]" />
+            </div>
+            <span className="text-[11px] font-semibold text-[var(--fg-1)] uppercase tracking-wider">
+              Assistant
+            </span>
+          </div>
+        )}
+
         {/* Images */}
         {imgs.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -81,7 +93,7 @@ export const MessageRow = memo(function MessageRow({
                 key={i}
                 src={`data:${im.mime};base64,${im.b64}`}
                 alt="attachment"
-                className="h-32 rounded-lg object-cover ring-1 ring-zinc-200"
+                className="h-32 rounded-[var(--radius-sm)] object-cover border border-[var(--border-subtle)]"
               />
             ))}
           </div>
@@ -89,38 +101,40 @@ export const MessageRow = memo(function MessageRow({
 
         {/* Content */}
         {user ? (
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          <div className="whitespace-pre-wrap text-[var(--text-md)] leading-relaxed text-[var(--fg-0)]">
             {body}
           </div>
         ) : (
-          <AssistantBody
-            body={body}
-            streaming={streaming}
-            elapsed={elapsed}
-            liveSteps={liveSteps}
-            toolCalls={msg.toolCalls as any}
-          />
+          <div className="text-[var(--text-md)] text-[var(--fg-0)]">
+            <AssistantBody
+              body={body}
+              streaming={streaming}
+              elapsed={elapsed}
+              liveSteps={liveSteps}
+              toolCalls={msg.toolCalls as any}
+            />
+          </div>
         )}
 
-        {/* Action icons (copy & edit) */}
+        {/* Action icons (copy & edit on hover) */}
         <div
-          className={`mt-1.5 flex items-center gap-2 text-xs transition-opacity ${
-            user ? "justify-end text-zinc-400" : "text-zinc-400"
+          className={`mt-2 flex items-center gap-2 text-xs transition-opacity opacity-0 group-hover:opacity-100 ${
+            user ? "justify-end text-[var(--fg-2)]" : "text-[var(--fg-2)]"
           }`}
         >
           {!streaming && body && (
             <button
               onClick={copyText}
-              className="flex items-center gap-1 hover:text-zinc-600 cursor-pointer"
+              className="inline-flex items-center gap-1 hover:text-[var(--fg-0)] transition-colors cursor-pointer"
               title="Copy message"
             >
               {copied ? (
                 <>
-                  <Check className="h-3 w-3 text-emerald-500" />
-                  <span className="text-[10px] text-emerald-600">Copied</span>
+                  <Check className="h-3 w-3 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400">Copied</span>
                 </>
               ) : (
-                <Copy className="h-3 w-3 opacity-60 hover:opacity-100" />
+                <Copy className="h-3 w-3" />
               )}
             </button>
           )}
@@ -128,10 +142,10 @@ export const MessageRow = memo(function MessageRow({
           {user && !streaming && (
             <button
               onClick={() => onEdit(msg)}
-              className="flex items-center gap-1 hover:text-zinc-200 cursor-pointer"
+              className="inline-flex items-center gap-1 hover:text-[var(--fg-0)] transition-colors cursor-pointer"
               title="Edit message"
             >
-              <Pencil className="h-3 w-3 opacity-60 hover:opacity-100" />
+              <Pencil className="h-3 w-3" />
             </button>
           )}
         </div>

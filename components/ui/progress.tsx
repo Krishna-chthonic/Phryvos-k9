@@ -23,11 +23,11 @@ export function Progress({ className, value = 0, max = 100, variant = "default",
   const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
 
   const variantStyles: Record<string, string> = {
-    default: "bg-zinc-900 dark:bg-zinc-100",
-    success: "bg-emerald-500",
-    warning: "bg-amber-500",
-    destructive: "bg-red-500",
-    info: "bg-sky-500",
+    default: "bg-[var(--accent)]",
+    success: "bg-[var(--success)]",
+    warning: "bg-[var(--warning)]",
+    destructive: "bg-[var(--danger)]",
+    info: "bg-[var(--accent)]",
   };
 
   const sizeStyles: Record<string, string> = {
@@ -46,7 +46,7 @@ export function Progress({ className, value = 0, max = 100, variant = "default",
       )}
       <div
         className={`
-          relative w-full overflow-hidden rounded-full bg-muted
+          relative w-full overflow-hidden rounded-full bg-[var(--bg-3)]
           ${sizeStyles[size]}
         `}
         role="progressbar"
@@ -85,18 +85,18 @@ export function ProgressCircle({ className, value = 0, max = 100, variant = "def
   const offset = circumference - (percentage / 100) * circumference;
 
   const variantStyles: Record<string, string> = {
-    default: "text-zinc-900 dark:text-zinc-100",
-    success: "text-emerald-500",
-    warning: "text-amber-500",
-    destructive: "text-red-500",
-    info: "text-sky-500",
+    default: "text-[var(--accent)]",
+    success: "text-[var(--success)]",
+    warning: "text-[var(--warning)]",
+    destructive: "text-[var(--danger)]",
+    info: "text-[var(--accent)]",
   };
 
   return (
     <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }} {...props}>
       <svg className="transform -rotate-90" width={size} height={size}>
         <circle
-          className="text-muted"
+          className="text-[var(--bg-3)]"
           strokeWidth={strokeWidth}
           stroke="currentColor"
           fill="transparent"

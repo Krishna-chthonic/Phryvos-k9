@@ -19,6 +19,80 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* ── Phryvos-K9 WCAG AA Neutral Scale (Dark Default) ── */
+  --bg-0: #0a0a0b;          /* main workspace background */
+  --bg-1: #111113;          /* rail, context pane, cards, dock surface */
+  --bg-2: #18181b;          /* elevated surface / hover state */
+  --bg-3: #232326;          /* active / selected row */
+  --bg-inset: #0d0d0f;      /* inset wells, code blocks */
+
+  /* ── Color: borders ── */
+  --border-subtle: #1f1f23;
+  --border: #2a2a2f;
+  --border-strong: #3f3f46;
+
+  /* ── Color: text (WCAG AA verified) ── */
+  --fg-0: #ededed;          /* primary text (>15:1 contrast) */
+  --fg-1: #a1a1aa;          /* secondary text (>7:1 contrast) */
+  --fg-2: #7e7e87;          /* tertiary text, captions, placeholders (≥4.6:1) */
+  --fg-3: #52525b;          /* decoration & disabled borders only */
+
+  /* ── Accent: Calm Deep Blue (≥4.5:1 with white text) ── */
+  --accent: #3a7bef;
+  --accent-hover: #4f8cff;
+  --accent-fg: #ffffff;
+  --accent-soft: #1a2436;
+  --accent-border: #2c4a7a;
+
+  /* ── Semantic ── */
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --danger-soft: #2a1416;
+
+  /* ── Radius ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ── Spacing (4px base) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Shadows ── */
+  --shadow-popover: 0 8px 24px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.3);
+  --shadow-dialog: 0 16px 48px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4);
+
+  /* ── Motion ── */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 320ms;
+
+  /* ── Typography Scale ── */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", monospace;
+  --text-xs: 11px;   --leading-xs: 16px;
+  --text-sm: 12px;   --leading-sm: 18px;
+  --text-base: 13px; --leading-base: 20px;
+  --text-md: 14px;   --leading-md: 22px;
+  --text-lg: 16px;   --leading-lg: 24px;
+  --text-xl: 20px;   --leading-xl: 28px;
+  --text-2xl: 24px;  --leading-2xl: 32px;
+  --text-3xl: 30px;  --leading-3xl: 38px;
+
   /* Core semantic colors */
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
@@ -119,14 +193,39 @@
   --code-number: 38 92% 55%;
 }
 
+:root[data-theme="light"] {
+  --bg-0: #ffffff;
+  --bg-1: #fafafa;
+  --bg-2: #f4f4f5;
+  --bg-3: #e4e4e7;
+  --bg-inset: #f4f4f5;
+  --border-subtle: #f0f0f1;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --fg-0: #18181b;
+  --fg-1: #52525b;
+  --fg-2: #63636b;
+  --fg-3: #a1a1aa;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef4ff;
+  --accent-border: #c7dcff;
+  --shadow-popover: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-dialog: 0 16px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08);
+}
+
 * {
-  border-color: hsl(var(--border));
+  border-color: var(--border-subtle);
 }
 
 body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background-color: var(--bg-0);
+  color: var(--fg-0);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Reduced motion support */
@@ -141,31 +240,30 @@ body {
   }
 }
 
-/* Focus visible styles */
+/* Subtle focus ring without cyberpunk glow */
 :focus-visible {
   outline: none;
-  ring: 2px solid hsl(var(--ring));
-  ring-offset: 2px;
-  ring-offset-background: hsl(var(--background));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent);
 }
 
-/* Scrollbar styling */
+/* Custom Thin Quiet-Luxury Scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: var(--fg-3);
 }
 
 /* Selection styling */

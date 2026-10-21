@@ -21,6 +21,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* Phryvos-K9 WCAG AA Design Tokens */
+        'bg-0': 'var(--bg-0)',
+        'bg-1': 'var(--bg-1)',
+        'bg-2': 'var(--bg-2)',
+        'bg-3': 'var(--bg-3)',
+        'bg-inset': 'var(--bg-inset)',
+        'border-subtle': 'var(--border-subtle)',
+        'border-strong': 'var(--border-strong)',
+        'fg-0': 'var(--fg-0)',
+        'fg-1': 'var(--fg-1)',
+        'fg-2': 'var(--fg-2)',
+        'fg-3': 'var(--fg-3)',
+        'accent-hover': 'var(--accent-hover)',
+        'accent-soft': 'var(--accent-soft)',
+        'accent-border': 'var(--accent-border)',
+        'danger-soft': 'var(--danger-soft)',
+
         /* Core semantic colors (mapped to CSS custom properties) */
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -4,6 +4,7 @@ import { getDot, updateDot, listDotMessages, appendDotMessage } from "@/lib/dots
 import { createLlmClient, defaultProvider, listProviders } from "@/lib/providers-service";
 import { runAgentTurn } from "@/lib/agent/loop";
 import { ensureAgentTools } from "@/lib/agent/tools";
+import { enhancePromptWithEcc } from "@/lib/ai/prompts/ecc-instincts";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
 const ChatBodySchema = z.object({
@@ -41,7 +42,7 @@ export async function POST(
     const messages: UnifiedMessage[] = [
       {
         role: "system",
-        content: `${dot.systemPrompt}\n\nYou are operating as the specialist AI coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}. Provide clear, thoughtful, high-quality responses and use tools actively to execute work.`,
+        content: `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as the specialist AI coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}. Provide clear, thoughtful, high-quality responses and use tools actively to execute work.`,
       },
       ...history.slice(-15).map((m) => ({
         role: m.role,

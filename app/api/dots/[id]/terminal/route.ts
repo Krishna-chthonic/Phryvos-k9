@@ -3,6 +3,7 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
 import { getDot, appendDotMessage } from "@/lib/dots-service";
+import { lintShellCommand, lintPath } from "@/lib/agent/safety-linter";
 
 const TerminalBodySchema = z.object({
   command: z.string().min(1),
@@ -23,6 +24,18 @@ export async function POST(
 
     const body = await req.json();
     const { command, cwd: requestedCwd } = TerminalBodySchema.parse(body);
+
+    // Pre-flight safety check
+    const shellCheck = lintShellCommand(command);
+    if (!shellCheck.ok) {
+      return Response.json({
+        command,
+        stdout: "",
+        stderr: shellCheck.reason,
+        exitCode: 126,
+        cwd: requestedCwd || dot.workingDirectory || process.cwd(),
+      });
+    }
 
     const workingDir = requestedCwd && fs.existsSync(requestedCwd)
       ? requestedCwd

@@ -21,6 +21,7 @@ import {
 import { defaultProvider, createLlmClient } from "./providers-service";
 import { runAgentTurn } from "./agent/loop";
 import { ensureAgentTools } from "./agent/tools";
+import { enhancePromptWithEcc } from "./ai/prompts/ecc-instincts";
 import type { UnifiedMessage } from "./ai/types";
 
 type GlobalRunner = { __phryvosDotRunner?: DotRunner };
@@ -154,7 +155,7 @@ export class DotRunner {
       const messages: UnifiedMessage[] = [
         {
           role: "system",
-          content: `${dot.systemPrompt}\n\nYou are operating as the specialist coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}.\n\nTHIS IS A SCHEDULED AUTONOMOUS TASK RUN. Perform necessary tool calls (terminal commands, search, files, analysis), observe outcomes, and generate a concise, high-value summary of what you did.`,
+          content: `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as the specialist coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}.\n\nTHIS IS A SCHEDULED AUTONOMOUS TASK RUN. Perform necessary tool calls (terminal commands, search, files, analysis), observe outcomes, and generate a concise, high-value summary of what you did.`,
         },
         {
           role: "user",

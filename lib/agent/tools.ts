@@ -68,6 +68,7 @@ import {
   mergeDotWorktree,
   removeDotWorktree,
 } from "@/lib/dots/worktree-service";
+import { synthesizeSkill } from "./skill-synthesizer";
 
 /**
  * All P4 agent tools, defined once. Registration is idempotent; the loop
@@ -1882,6 +1883,40 @@ export function ensureAgentTools(): void {
       action: z.enum(["create", "status", "merge", "remove"]),
       dotName: z.string(),
       targetBranch: z.string().optional(),
+    }),
+  );
+
+  // ---------------------------------------------------------------- Hermes Autonomous Skill Synthesis
+
+  reg(
+    "synthesize_skill",
+    "Permanently learn and synthesize a new reusable skill from a task solution. Generates a structured SKILL.md documentation in the user vault at /skills/<name>/SKILL.md and activates a live executable tool in memory for all Dots and chats to use.",
+    P(
+      "synthesize_skill",
+      "Synthesize reusable AI skill",
+      {
+        name: { type: "string", description: "Skill name in snake_case, e.g. 'extract_tar_gz'" },
+        description: { type: "string", description: "What the skill accomplishes and when to call it" },
+        code: { type: "string", description: "JavaScript function body, e.g. const res = await fetch(...); return res.text();" },
+      },
+      {
+        parameters: { type: "object", description: "JSON schema object for parameters" },
+        exampleUsage: { type: "string", description: "Usage instructions or example" },
+        authorDot: { type: "string", description: "Name of the Dot synthesizing this skill" },
+      },
+    ),
+    async (c, a: never) => {
+      const res = await synthesizeSkill(c, a);
+      return res.message;
+    },
+    false,
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      code: z.string(),
+      parameters: z.any().optional(),
+      exampleUsage: z.string().optional(),
+      authorDot: z.string().optional(),
     }),
   );
 }

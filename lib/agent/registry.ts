@@ -1,6 +1,7 @@
 import type { ToolSpec } from "../ai/types";
 import type { VaultCtx } from "../vault-service";
 import { z } from "zod";
+import { lintToolExecution } from "./safety-linter";
 
 /**
  * Agent tool registry. Tools are defined ONCE in OpenAI function-calling
@@ -52,6 +53,13 @@ export async function runTool(
 ): Promise<string> {
   const def = defs.get(name);
   if (!def) return `ERROR: unknown tool "${name}"`;
+
+  // Pre-flight safety lint (iFixAi Guardrail)
+  const safety = lintToolExecution(name, args ?? {});
+  if (!safety.ok) {
+    return `DENIED: ${safety.reason}`;
+  }
+
   if (def.schema) {
     const parsed = def.schema.safeParse(args ?? {});
     if (!parsed.success) {

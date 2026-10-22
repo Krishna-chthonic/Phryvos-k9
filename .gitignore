@@ -45,6 +45,12 @@ next-env.d.ts
 # vault data (encrypted DB + backup bundles — never in VCS)
 /data/
 /backups/
+/exports/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.bak
 .phryvos.pid
 .phryvos.log
 .phryvos/worktrees/

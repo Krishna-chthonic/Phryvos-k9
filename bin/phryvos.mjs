@@ -282,9 +282,10 @@ async function cmdUpdate() {
 
   if (isGitRepo) {
     try {
-      const gitStatus = execSync("git status --porcelain", { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
+      // Check for uncommitted/dirty local changes to tracked files (-uno ignores untracked data/db files)
+      const gitStatus = execSync("git status --porcelain -uno", { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
       if (gitStatus.length > 0) {
-        console.error(`${c.red}Update aborted: You have uncommitted local changes.${c.reset}`);
+        console.error(`${c.red}Update aborted: You have uncommitted local changes to tracked files.${c.reset}`);
         console.log(`Please commit, stash, or revert your changes before updating.\n`);
         return;
       }

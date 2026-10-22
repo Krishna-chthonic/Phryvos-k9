@@ -1,165 +1,223 @@
 <div align="center">
 
 ```
-   ____  __                               
-  / __ \/ /_  ______  ______  ______  _____
- / /_/ / __ \/ ___/ / / / / / / __ \/ ___/
-/ ____/ / / / /  / /_/ / /_/ / /_/ (__  ) 
-/_/   /_/ /_/_/   \__, /\__,_/\____/____/  
-                 /____/                    
+   ____  __                                      __ _____ 
+  / __ \/ /_  ______  ______  ______  _____     / //_/   |
+ / /_/ / __ \/ ___/ / / / / / / __ \/ ___/____ / ,<  / /| |
+/ ____/ / / / /  / /_/ / /_/ / /_/ (__  )/___// /| |/ ___ |
+/_/   /_/ /_/_/   \__, /\__,_/\____/____/    /_/ |_/_/  |_|
+                 /____/                    v0.1.0
 ```
 
-# Phryvos (K9)
+# Phryvos K9
 ### 🔒 Local-First, Envelope-Encrypted AI Vault & Personal Life OS
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.4-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![CI](https://github.com/Krishna-chthonic/Phryvos-k9/actions/workflows/ci.yml/badge.svg)](https://github.com/Krishna-chthonic/Phryvos-k9/actions/workflows/ci.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.3-149eca?style=for-the-badge&logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=for-the-badge&logo=sqlite)](https://sqlite.org/)
-[![Security](https://img.shields.io/badge/Encryption-AES--256--GCM-green?style=for-the-badge&logo=shield)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
-[![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
+[![Security](https://img.shields.io/badge/Encryption-AES--256--GCM%20%2B%20AAD-2ea44f?style=for-the-badge&logo=shield)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Termux-f48024?style=for-the-badge)](https://termux.dev)
+[![License](https://img.shields.io/badge/License-MIT-a371f7?style=for-the-badge)](LICENSE)
 
 <p align="center">
-  <b>Phryvos</b> is an open-source, private-by-design personal vault that combines a conversational AI assistant with complete life tracking and file management. 
+  <b>Phryvos K9</b> is an open-source, private-by-design personal intelligence system and life operating system.
   <br />
-  <b>Zero cloud tracking. Zero developer relays. 100% of your data stays locally on your device.</b>
+  Combines conversational AI, graph-linked vault files, automated workflows, and academic tracking into a single zero-trust local runtime.
+  <br /><br />
+  <b>Zero Cloud Telemetry · Zero Developer Relays · 100% Local Device Sovereignty</b>
 </p>
+
+[Quick Start](#-quick-start) • [Key Features](#-key-features) • [Security Model](#-security--cryptography-architecture) • [CLI Manual](#-cli-reference-phryvos-k9) • [Android / Termux](#-android--termux-native-support)
 
 ---
 
 </div>
 
-## ✨ Key Features
+## 📑 Table of Contents
 
-| Module | Highlights |
-| :--- | :--- |
-| **🤖 AI Assistant** | Multi-session chat, streaming responses, `@file` vault context injections, vision support, sandboxed HTML artifact previews, tool execution with approval gates. |
-| **📁 File Manager** | Encrypted file tree with full-text search (FTS5), Monaco code editor, automatic version history (20 snapshots + daily), binary file previews. |
-| **🔌 Custom AI Providers** | Bring your own keys and models! Works with any OpenAI-compatible endpoint (Ollama, OpenRouter, LocalAI) plus Anthropic presets. Keys are stored encrypted with your master key. |
-| **📋 Project Tracking** | Interactive Kanban boards, Gantt charts, dependency graphs (prerequisite blockers), and live task time tracking. |
-| **🎯 Life OS Modules** | Goal tracking with milestones, Exam study planners with progress sliders & time logs, and standalone local calendar. |
-| **🛡️ Local-First Vault Security** | Scrypt KDF + AES-256-GCM envelope encryption for stored files, versions, and AI provider API keys. Salted duress PIN with isolated Ghost Vault (decoy NCERT database) defense. |
-| **📦 Backup & Restore** | Encrypted full bundles (DB + blobs + manifest), automated scheduled snapshots, single-click restore, and password re-keying. |
+- [Overview & Philosophy](#-overview--philosophy)
+- [✨ Key Features](#-key-features)
+- [🔐 Security & Cryptography Architecture](#-security--cryptography-architecture)
+- [⚡ Quick Start](#-quick-start)
+  - [1. One-Line Automated Installer](#1-one-line-automated-installer-recommended)
+  - [2. Manual Clone & Build](#2-manual-clone--build)
+- [💻 CLI Reference (`phryvos-k9`)](#-cli-reference-phryvos-k9)
+- [🤖 AI Engine & Provider Boundaries](#-ai-engine--provider-boundaries)
+- [📱 Android & Termux Native Support](#-android--termux-native-support)
+- [🧪 Testing & Verification](#-testing--verification)
+- [🤝 Contributing & License](#-contributing--license)
 
 ---
 
-## 🔒 Data Privacy & AI Provider Boundaries
+## 💡 Overview & Philosophy
 
-- **100% Local Vault Storage:** Your files, notes, database records (`data/vault.db`), version histories, and settings stay strictly on your local disk.
-- **Zero Telemetry:** Phryvos contains no background analytics, cloud tracking, or developer telemetry pings.
-- **AI Processing Boundary:**
-  - **Local Models (Ollama, LocalAI):** All inference, prompts, and `@file` context stay completely within your local machine with zero external data egress.
-  - **Remote Cloud Models (OpenAI, Anthropic, OpenRouter):** When you configure remote API keys, messages and explicitly referenced file excerpts are sent via HTTPS directly from your machine to that provider's API. No intermediate developer relays exist.
+Modern AI tools demand your notes, documents, schedule, and habits—then send them to remote corporate clouds. **Phryvos K9** inverts this model:
+
+1. **Local-First Architecture:** Your entire database (`data/vault.db`), encrypted files, project boards, and chat histories live locally on your machine.
+2. **Envelope Cryptography:** Files are encrypted with individual data keys (DEKs) wrapped by a memory-only master key. Master keys never touch persistent storage.
+3. **Pluggable & Hybrid AI:** Use local offline models (Ollama, LocalAI) for zero-egress environments, or connect your own API keys directly to OpenAI, Anthropic, OpenRouter, or DeepSeek with zero intermediate proxy servers.
+4. **Plausible Deniability:** Salted duress PIN routing unlocks an isolated decoy Ghost Vault with identical schema and latency, safeguarding you under physical coercion.
+
+---
+
+## ✨ Key Features
+
+| Capability | Highlights |
+| :--- | :--- |
+| **🤖 Conversational AI & Agent Loop** | Multi-session chat, streaming tokens, `@file` vault context injections, vision support, sandboxed HTML artifact previews, and cryptographic TOCTOU-resistant approval gates for destructive tools. |
+| **🔌 Universal MCP Host Kernel** | Dynamic mounting of external Model Context Protocol (MCP) servers, live tool discovery, and local agent orchestration. |
+| **🕸️ Knowledge Graph & [[wiki-links]]** | Bidirectional link parsing, interactive graph visualization, backlink indexing, orphan detection, and ghost link tracking across markdown documents. |
+| **🧠 Spaced Repetition (FSRS-4.5)** | Modern Free Spaced Repetition Scheduler computing memory stability and difficulty decay for flashcard retention. |
+| **📊 Project Tracking & DAG Critical Path** | Interactive Kanban boards, Gantt charts, topological sorting, dependency blocker graphs, and schedule diffing for project deadlines. |
+| **📁 Encrypted File Manager** | Per-file AES-256-GCM + AAD envelope encryption, full-text search (SQLite FTS5), integrated Monaco editor, daily + version history rollbacks, and binary previews. |
+| **🎯 Academic & Life OS** | Goal tracking with auto-computed milestone progress, exam revision planners with time logs & topic mastery sliders, and a standalone local calendar. |
+| **🛡️ Duress Defense & Ghost Vault** | Salted duress PIN unlocking an isolated decoy NCERT database with identical API response shapes and auto-lock timeouts. |
+| **📦 Disaster Recovery & Atomic Restore** | Automated full bundle snapshots (DB + blobs + manifest), SHA-256 integrity verification, path confinement, and atomic rollback on failed restores. |
+
+---
+
+## 🔐 Security & Cryptography Architecture
+
+```mermaid
+flowchart TD
+    Password["User Master Password"] --> Scrypt["Scrypt KDF (N=32768, r=8, p=1, 64-byte split)"]
+    Scrypt -->|Bytes 0-31| MasterKey["Master Key (Volatile RAM only, zeroed on lock)"]
+    Scrypt -->|Bytes 32-63| Verifier["Password Verifier (timingSafeEqual)"]
+
+    MasterKey -->|Wrap DEK via AES-256-GCM + AAD| WrappedDEK["Encrypted File DEK (DB)"]
+    MasterKey -->|AES-256-GCM| EncryptedKeys["AI Provider Keys & Secrets"]
+    
+    DEK["Unique 32-byte DEK"] -->|AES-256-GCM + file:id AAD| EncryptedBlob["Encrypted File Content (Disk)"]
+    WrappedDEK -.->|Unwrap| DEK
+```
+
+- **Volatile Master Key:** Held strictly in Node runtime memory (`lib/session/store.ts`). Master keys are cleared via cryptographic random wipes on vault lock or session expiration.
+- **AAD Cryptographic Binding:** File envelopes bind file IDs via Additional Authenticated Data (`file:${id}`), preventing ciphertext substitution attacks between database records.
+- **Hermetic Code Execution:** The built-in JavaScript code runner executes in an isolated sandbox with prototype poisoning mitigations, execution timeouts, and AST validation.
+- **SQL Defense-in-Depth:** Agent database queries are gated through dedicated read-only handles with `query_only = ON`, `SELECT`/`WITH` restrictions, and forced `LIMIT` clauses.
+- **Path Confinement:** Backup restore and filesystem operations enforce strict canonical directory boundaries (`isContainedIn`), rejecting directory traversal attempts (`../`) and null bytes.
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. One-Line Install (Recommended)
+### 1. One-Line Automated Installer (Recommended)
 
-Run this command in your terminal (Linux, macOS, or Android Termux):
+Compatible with **Linux**, **macOS**, and **Android Termux**:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Krishna-chthonic/Phryvos-k9/main/install.sh | bash
 ```
 
-### 2. Manual Clone & Run
+### 2. Manual Clone & Build
+
+Ensure you have **Node.js (v20+)** and **npm** installed:
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/Krishna-chthonic/Phryvos-k9.git phryvos
 cd phryvos
 
-# Install dependencies & build
+# 2. Install dependencies & build production bundles
 npm install
 npm run build
 
-# Start using the CLI
+# 3. Launch background daemon via CLI
 ./bin/phryvos.mjs start
 ```
 
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+Open your browser to **[http://localhost:3000](http://localhost:3000)** and configure your master vault password on first launch!
 
 ---
 
 ## 💻 CLI Reference (`phryvos-k9`)
 
-Phryvos K9 includes a built-in terminal CLI to manage your background daemon effortlessly:
+Phryvos includes a production daemon management CLI (`phryvos-k9` or `phryvos`):
 
 ```bash
 phryvos-k9 <command> [options]
-# (also supports: phryvos k9 <command>)
 ```
 
-| Command | Description |
-| :--- | :--- |
-| `phryvos-k9 start` | Start Phryvos K9 server as a background daemon (default port `3000`) |
-| `phryvos-k9 start --dev` | Start in development mode with live hot-reloading |
-| `phryvos-k9 start -f` | Run in the foreground of the current terminal |
-| `phryvos-k9 stop` | Stop the running Phryvos K9 background server |
-| `phryvos-k9 restart` | Restart the background server |
-| `phryvos-k9 status` | Check if Phryvos K9 is currently running and responding |
-| `phryvos-k9 logs` | View the latest server logs (`tail -n 50`) |
-| `phryvos-k9 update` | Fetch latest release from Git and automatically rebuild |
-| `phryvos-k9 version` | Display installed version |
+| Command | Options | Description |
+| :--- | :--- | :--- |
+| `start` | `--port <num>`, `-f`, `--dev` | Launch Phryvos daemon in background (or foreground `-f`) |
+| `stop` | — | Gracefully terminate the running instance and its process tree |
+| `restart` | `--port <num>` | Gracefully stop and relaunch the background daemon |
+| `status` | — | Inspect runtime status, active PID, and configured port |
+| `logs` | `-n <lines>` | View live server logs (defaults to last 50 lines) |
+| `update` | — | Safe Git updater (verifies clean tree, pulls `--ff-only`, rebuilds) |
+| `version` | `-v`, `--version` | Display current installed release version |
+| `help` | `-h`, `--help` | Show command usage and options manual |
 
 ---
 
-## 🔐 Security & Encryption Architecture
+## 🤖 AI Engine & Provider Boundaries
+
+Phryvos gives you complete freedom over your choice of AI intelligence:
 
 ```
-User Password ─scrypt(N=32768, r=8, p=1, len=64)→ 64 bytes
-                     ├─ 0–31  = MASTER KEY (held in RAM only, dropped on lock)
-                     └─ 32–63 = Verifier (checked via timingSafeEqual)
-
-Per-File DEK = randomBytes(32) → AES-256-GCM(MASTER, DEK); AES-256-GCM(DEK, content)
-AI Keys, Chat Blobs, Notes: AES-256-GCM(MASTER, payload)
+┌────────────────────────────────────────────────────────┐
+│                      PHRYVOS K9                        │
+│                                                        │
+│  [Local Workflows]  ──►  Ollama / LocalAI (Offline)     │
+│  [Cloud Providers]  ──►  Direct TLS (No Middleman)     │
+└───────────────┬────────────────────────┬───────────────┘
+                │                        │
+         ┌──────▼──────┐          ┌──────▼──────┐
+         │ Localhost   │          │ Provider API│
+         │ (127.0.0.1) │          │ (HTTPS direct)
+         └─────────────┘          └─────────────┘
 ```
 
-- **In-Memory Master Key:** The master key never touches the disk. It is stored in a sliding in-memory session and discarded immediately on vault lock or server restart.
-- **Envelope Encryption:** Every file has its own unique Data Encryption Key (DEK). Re-keying (changing password) only re-wraps the DEKs—your large file content remains untouched and fast.
-- **Local SQLite WAL:** SQLite runs in Write-Ahead Logging (WAL) mode with strict read-only sandboxing on AI agent data queries.
+- **Local Inference (Ollama / LocalAI):** Prompts, `@file` context, and embeddings never leave your machine.
+- **Direct Remote Inference (OpenAI / Anthropic / OpenRouter / DeepSeek / Groq):** Direct client-to-provider HTTPS communication. Your API keys are encrypted at rest with your master key.
 
 ---
 
-## 📱 Android & Termux Support
+## 📱 Android & Termux Native Support
 
-Phryvos runs natively inside **Termux / proot** environments on Android:
+Phryvos runs seamlessly on Android devices inside Termux / PRoot:
 
 ```bash
-# Ensure standard glibc environment PATH:
+# Set glibc PATH in proot/termux:
 export PATH=/usr/bin:/usr/sbin:/sbin:/bin:/usr/local/bin:$PATH
 
-phryvos start
+# Start daemon
+phryvos-k9 start --port 3000
 ```
 
----
-
-## 🛠️ Tech Stack
-
-- **Framework**: Next.js 16.4.0 (App Router, Node runtime) + React 19.3.0
-- **Language**: TypeScript ~5.9
-- **Styling**: Tailwind CSS 4.3.3
-- **Database**: SQLite (`better-sqlite3`) + Drizzle ORM
-- **Cryptography**: Node built-in `crypto` (scrypt, AES-256-GCM)
-- **AI SDKs**: `openai@7.32.0`, `@anthropic-ai/sdk@0.133.0`
-- **Editor**: `@monaco-editor/react` (SSR off, lazy loaded)
-- **Scheduling**: `node-cron`
+Access Phryvos from your Android browser or over your local network via Wi-Fi.
 
 ---
 
-## 🤝 Contributing
+## 🧪 Testing & Verification
 
-Contributions are welcome! Please open an issue or submit a PR.
+Phryvos maintains an extensive test suite verifying cryptographic invariants, agent guardrails, and data ownership:
 
 ```bash
-git checkout -b feature/my-new-feature
-git commit -am 'Add some feature'
-git push origin feature/my-new-feature
+# Typecheck
+npm run typecheck
+
+# Execute unit and security test suites (94 tests across 32 suites)
+npm test
+
+# Build production bundle
+npm run build
 ```
 
 ---
 
-## 📄 License
+## 🤝 Contributing & License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+Contributions, feature suggestions, and bug reports are warmly welcome!
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Verify test suites pass (`npm test && npm run typecheck`)
+4. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for full details.

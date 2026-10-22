@@ -14,7 +14,12 @@ import { kvSet } from "@/lib/db/kv";
 
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/defaults";
 import { sessionCookieOptions } from "@/lib/session/cookie";
-import { ThrottleError, assertNotThrottled } from "@/lib/session/throttle";
+import {
+  ThrottleError,
+  assertNotThrottled,
+  recordFail,
+  clearThrottle,
+} from "@/lib/session/throttle";
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
 import { setupVault } from "@/lib/dal/duress-vault";
@@ -34,6 +39,7 @@ export async function POST(req: Request) {
     assertNotThrottled("setup");
     const db = getDb();
     if (db.prepare("SELECT 1 FROM auth LIMIT 1").get()) {
+      recordFail("setup");
       return Response.json(
         {
           error: {
@@ -48,6 +54,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     const parsed = SetupBody.safeParse(body);
     if (!parsed.success) {
+      recordFail("setup");
       return Response.json(
         {
           error: {
@@ -64,6 +71,9 @@ export async function POST(req: Request) {
 
     kvSet("system_prompt", DEFAULT_SYSTEM_PROMPT);
     kvSet("auto_lock_minutes", "30");
+
+    // Setup succeeded: clear throttle strikes
+    clearThrottle("setup");
 
     // Open initial session using the exact same masterKey derived from stored salt
     const ttlMs = 30 * 60_000;

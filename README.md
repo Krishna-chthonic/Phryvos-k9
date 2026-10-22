@@ -67,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/Krishna-chthonic/Phryvos-k9/main/in
 
 ```bash
 # Clone the repository
-git clone https://github.com/Krishna-chthonic/Phryvos-k9.git
+git clone https://github.com/Krishna-chthonic/Phryvos-k9.git phryvos
 cd phryvos
 
 # Install dependencies & build

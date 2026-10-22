@@ -49,29 +49,52 @@ ${c.cyan}${c.bold}   ____  __                                      __ _____
 `);
 }
 
-function getRunningPid() {
+function getRunningInstance() {
   if (fs.existsSync(PID_FILE)) {
     try {
-      const pid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
+      const raw = fs.readFileSync(PID_FILE, "utf-8").trim();
+      let pid = null;
+      let port = 3000;
+      let startedAt = null;
+
+      if (raw.startsWith("{")) {
+        const data = JSON.parse(raw);
+        pid = parseInt(data.pid, 10);
+        port = parseInt(data.port, 10) || 3000;
+        startedAt = data.startedAt;
+      } else {
+        pid = parseInt(raw, 10);
+      }
+
       if (pid && !isNaN(pid)) {
         process.kill(pid, 0);
-        return pid;
+        return { pid, port, startedAt };
       }
     } catch {
       try { fs.unlinkSync(PID_FILE); } catch {}
     }
   }
+  return null;
+}
 
-  // Fallback: check running processes via pgrep (bracket trick prevents self-matching)
+function getRunningPid() {
+  const inst = getRunningInstance();
+  return inst ? inst.pid : null;
+}
+
+function killProcessTree(pid, signal = "SIGTERM") {
   try {
-    const out = execSync("pgrep -f '[n]ext-server' 2>/dev/null || pgrep -f '[n]pm run start' 2>/dev/null", { encoding: "utf-8" }).trim();
-    if (out) {
-      const pids = out.split("\n").map(p => parseInt(p.trim(), 10)).filter(p => !isNaN(p) && p !== process.pid);
-      if (pids.length > 0) return pids[pids.length - 1];
+    const childrenOut = execSync(`pgrep -P ${pid} 2>/dev/null || true`, { encoding: "utf-8" }).trim();
+    if (childrenOut) {
+      const childPids = childrenOut.split("\n").map((p) => parseInt(p.trim(), 10)).filter(Boolean);
+      for (const childPid of childPids) {
+        killProcessTree(childPid, signal);
+      }
     }
   } catch {}
-
-  return null;
+  try {
+    process.kill(pid, signal);
+  } catch {}
 }
 
 function getGlibcEnv() {
@@ -101,10 +124,10 @@ async function checkPortOpen(port = 3000, timeoutMs = 3000) {
 
 async function cmdStart(args) {
   banner();
-  const existingPid = getRunningPid();
-  if (existingPid) {
-    console.log(`${c.yellow}⚠️  Phryvos is already running (PID: ${existingPid})${c.reset}`);
-    console.log(`Open: ${c.green}${c.bold}http://localhost:3000${c.reset}\n`);
+  const existingInst = getRunningInstance();
+  if (existingInst) {
+    console.log(`${c.yellow}⚠️  Phryvos is already running (PID: ${existingInst.pid})${c.reset}`);
+    console.log(`Open: ${c.green}${c.bold}http://localhost:${existingInst.port}${c.reset}\n`);
     return;
   }
 
@@ -138,9 +161,14 @@ async function cmdStart(args) {
   });
 
   child.unref();
-  fs.writeFileSync(PID_FILE, child.pid.toString(), "utf-8");
+  const meta = {
+    pid: child.pid,
+    port: parseInt(port, 10) || 3000,
+    startedAt: Date.now(),
+  };
+  fs.writeFileSync(PID_FILE, JSON.stringify(meta, null, 2), "utf-8");
 
-  console.log(`${c.green}✔ Process started in background (PID: ${child.pid})${c.reset}`);
+  console.log(`${c.green}✔ Process started in background (PID: ${child.pid}, Port: ${meta.port})${c.reset}`);
   console.log(`Logs: ${c.dim}${LOG_FILE}${c.reset}`);
   console.log(`Connecting...`);
 
@@ -149,11 +177,11 @@ async function cmdStart(args) {
   const maxAttempts = 15;
   const interval = setInterval(async () => {
     attempts++;
-    const ok = await checkPortOpen(port, 1500);
+    const ok = await checkPortOpen(meta.port, 1500);
     if (ok) {
       clearInterval(interval);
       console.log(`\n${c.green}${c.bold}✨ Phryvos is ready!${c.reset}`);
-      console.log(`URL: ${c.cyan}${c.bold}http://localhost:${port}${c.reset}\n`);
+      console.log(`URL: ${c.cyan}${c.bold}http://localhost:${meta.port}${c.reset}\n`);
     } else if (attempts >= maxAttempts) {
       clearInterval(interval);
       console.log(`\n${c.yellow}Phryvos is still initializing. Check logs with:${c.reset}`);
@@ -166,18 +194,34 @@ async function cmdStart(args) {
 
 function cmdStop() {
   banner();
-  const pid = getRunningPid();
-  if (!pid) {
+  const inst = getRunningInstance();
+  if (!inst) {
     console.log(`${c.yellow}Phryvos is not currently running.${c.reset}\n`);
     return;
   }
 
+  const { pid } = inst;
   console.log(`${c.blue}Stopping Phryvos (PID: ${pid})...${c.reset}`);
   try {
-    try { process.kill(pid, "SIGTERM"); } catch {}
-    try { execSync(`pkill -P ${pid} 2>/dev/null || true`); } catch {}
-    try { execSync("pkill -f 'next-server' 2>/dev/null || true"); } catch {}
-    try { execSync("pkill -f 'npm run (start|dev)' 2>/dev/null || true"); } catch {}
+    killProcessTree(pid, "SIGTERM");
+
+    // Wait up to 3 seconds for graceful shutdown
+    const start = Date.now();
+    let alive = true;
+    while (Date.now() - start < 3000) {
+      try {
+        process.kill(pid, 0);
+        execSync("sleep 0.1 2>/dev/null || true");
+      } catch {
+        alive = false;
+        break;
+      }
+    }
+
+    if (alive) {
+      killProcessTree(pid, "SIGKILL");
+    }
+
     try {
       if (fs.existsSync(PID_FILE)) fs.unlinkSync(PID_FILE);
     } catch {}
@@ -189,20 +233,26 @@ function cmdStop() {
 
 async function cmdStatus() {
   banner();
-  const ok = await checkPortOpen(3000, 1500);
-  const pid = getRunningPid();
+  const inst = getRunningInstance();
 
-  if (!ok && !pid) {
+  if (!inst) {
     console.log(`Status: ${c.red}${c.bold}Stopped${c.reset}`);
+    const portInUse = await checkPortOpen(3000, 1000);
+    if (portInUse) {
+      console.log(`${c.yellow}Note: Port 3000 is responding to requests, but not from this Phryvos instance.${c.reset}`);
+    }
     console.log(`Run ${c.bold}phryvos start${c.reset} to launch.\n`);
     return;
   }
 
-  console.log(`Status: ${c.green}${c.bold}Running${c.reset}${pid ? ` (PID: ${pid})` : ""}`);
+  const port = inst.port || 3000;
+  const ok = await checkPortOpen(port, 1500);
+
+  console.log(`Status: ${c.green}${c.bold}Running${c.reset} (PID: ${inst.pid})`);
   if (ok) {
-    console.log(`Web UI: ${c.cyan}${c.bold}http://localhost:3000${c.reset} (Responding)`);
+    console.log(`Web UI: ${c.cyan}${c.bold}http://localhost:${port}${c.reset} (Responding)`);
   } else {
-    console.log(`Web UI: ${c.yellow}http://localhost:3000 (Starting up...)${c.reset}`);
+    console.log(`Web UI: ${c.yellow}http://localhost:${port} (Starting up...)${c.reset}`);
   }
   console.log(`Logs:   ${c.dim}${LOG_FILE}${c.reset}\n`);
 }
@@ -232,8 +282,17 @@ async function cmdUpdate() {
 
   if (isGitRepo) {
     try {
+      const gitStatus = execSync("git status --porcelain", { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
+      if (gitStatus.length > 0) {
+        console.error(`${c.red}Update aborted: You have uncommitted local changes.${c.reset}`);
+        console.log(`Please commit, stash, or revert your changes before updating.\n`);
+        return;
+      }
+
       console.log(`Fetching latest changes from git...`);
       execSync("git fetch origin", { cwd: ROOT_DIR, stdio: "inherit" });
+      
+      const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
       const status = execSync("git status -uno", { cwd: ROOT_DIR, encoding: "utf-8" });
       
       if (status.includes("Your branch is up to date")) {
@@ -241,11 +300,8 @@ async function cmdUpdate() {
         return;
       }
 
-      console.log(`${c.yellow}Pulling updates...${c.reset}`);
-      try {
-        execSync("git checkout -- package-lock.json 2>/dev/null || true", { cwd: ROOT_DIR });
-      } catch {}
-      execSync("git reset --hard origin/main", { cwd: ROOT_DIR, stdio: "inherit" });
+      console.log(`${c.yellow}Pulling updates for branch '${currentBranch}'...${c.reset}`);
+      execSync(`git pull --ff-only origin ${currentBranch}`, { cwd: ROOT_DIR, stdio: "inherit" });
       
       console.log(`${c.blue}Updating dependencies and rebuilding...${c.reset}`);
       const env = getGlibcEnv();
@@ -253,8 +309,8 @@ async function cmdUpdate() {
       execSync("npm run build", { cwd: ROOT_DIR, env, stdio: "inherit" });
 
       console.log(`\n${c.green}${c.bold}✨ Phryvos updated successfully!${c.reset}`);
-      const pid = getRunningPid();
-      if (pid) {
+      const inst = getRunningInstance();
+      if (inst) {
         console.log(`${c.yellow}Restarting running instance...${c.reset}`);
         cmdStop();
         await cmdStart([]);

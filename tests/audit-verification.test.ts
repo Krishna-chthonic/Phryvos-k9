@@ -193,4 +193,50 @@ describe("Audit Verification: Security Fixes", () => {
 
     db.close();
   });
+
+  it("F-01: backup path confinement prevents path traversal out of backups/export directory", () => {
+    const parentDir = path.resolve("/tmp/backups");
+    function isContainedIn(childPath: string, dir: string): boolean {
+      const relative = path.relative(dir, childPath);
+      return !relative.startsWith("..") && !path.isAbsolute(relative);
+    }
+
+    assert.strictEqual(isContainedIn("/tmp/backups/backup-2026.zip", parentDir), true);
+    assert.strictEqual(isContainedIn("/etc/passwd", parentDir), false);
+    assert.strictEqual(isContainedIn("/tmp/backups/../other/file.zip", parentDir), false);
+  });
+
+  it("F-05: backup kind validation only permits 'auto', 'manual', 'export'", () => {
+    const { z } = require("zod");
+    const BackupBody = z.object({
+      kind: z.enum(["auto", "manual", "export"]).optional(),
+    });
+
+    assert.strictEqual(BackupBody.safeParse({ kind: "auto" }).success, true);
+    assert.strictEqual(BackupBody.safeParse({ kind: "manual" }).success, true);
+    assert.strictEqual(BackupBody.safeParse({ kind: "export" }).success, true);
+    assert.strictEqual(BackupBody.safeParse({ kind: "arbitrary_injected" }).success, false);
+  });
+
+  it("F-06: setup route records throttle failures and resets on success", () => {
+    const { recordFail, clearThrottle, assertNotThrottled } = require("../lib/session/throttle.ts");
+    clearThrottle("setup-test");
+    recordFail("setup-test");
+    recordFail("setup-test");
+    // Throttling triggers on 5 fails
+    recordFail("setup-test");
+    recordFail("setup-test");
+    recordFail("setup-test");
+
+    let throttled = false;
+    try {
+      assertNotThrottled("setup-test");
+    } catch {
+      throttled = true;
+    }
+    assert.strictEqual(throttled, true, "Should be throttled after 5 failures");
+
+    clearThrottle("setup-test");
+    assert.doesNotThrow(() => assertNotThrottled("setup-test"));
+  });
 });

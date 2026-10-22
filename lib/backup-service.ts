@@ -33,8 +33,8 @@ import { ensureVaultUnlocked, VaultLockedError } from "@/lib/dal/vault-dal";
 
 // ------------------------------------------------------------ dirs
 
-const BACKUPS_DIR = path.join(process.cwd(), "backups");
-const EXPORT_DIR = path.join(process.cwd(), "exports");
+export const BACKUPS_DIR = path.join(process.cwd(), "backups");
+export const EXPORT_DIR = path.join(process.cwd(), "exports");
 
 export function ensureBackupsDir(): void {
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
@@ -203,24 +203,26 @@ export async function restoreBackup(backupPath: string): Promise<RestoreResult> 
       }
     }
 
-    // Check manifest checksum if manifest exists
+    // Strict manifest verification: fail-closed if manifest exists
     const manifestFiles = fs.readdirSync(tmpDir).filter((f) => f.startsWith("manifest") && f.endsWith(".json"));
     if (manifestFiles.length > 0) {
       try {
         const manifestRaw = fs.readFileSync(path.join(tmpDir, manifestFiles[0]), "utf8");
         const manifest = JSON.parse(manifestRaw) as { db_sha256?: string };
-        if (manifest.db_sha256) {
-          const actualSha256 = createHash("sha256")
-            .update(fs.readFileSync(restoredDbPath))
-            .digest("hex");
-          if (actualSha256 !== manifest.db_sha256) {
-            throw new Error("Backup corrupted: manifest checksum mismatch");
-          }
+        if (!manifest || typeof manifest !== "object" || typeof manifest.db_sha256 !== "string") {
+          throw new Error("Backup corrupted: malformed manifest or missing db_sha256");
+        }
+        const actualSha256 = createHash("sha256")
+          .update(fs.readFileSync(restoredDbPath))
+          .digest("hex");
+        if (actualSha256 !== manifest.db_sha256) {
+          throw new Error("Backup corrupted: manifest checksum mismatch");
         }
       } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes("manifest checksum mismatch")) {
+        if (err instanceof Error) {
           throw err;
         }
+        throw new Error("Backup corrupted: manifest verification failed");
       }
     }
 
@@ -237,11 +239,19 @@ export async function restoreBackup(backupPath: string): Promise<RestoreResult> 
 
     const currentDb = getDb();
     currentPath = currentDb.name;
+    // Checkpoint & truncate WAL to ensure current DB snapshot is completely self-contained
+    try {
+      currentDb.pragma("wal_checkpoint(TRUNCATE)");
+    } catch {}
     currentDb.close();
 
     // Preserve pre-restore safety snapshot for rollback
     preRestoreBackup = `${currentPath}.pre-restore-${Date.now()}.bak`;
     fs.copyFileSync(currentPath, preRestoreBackup);
+
+    // Remove old WAL/SHM artifacts before copying new database
+    try { fs.unlinkSync(`${currentPath}-wal`); } catch {}
+    try { fs.unlinkSync(`${currentPath}-shm`); } catch {}
 
     try {
       fs.copyFileSync(restoredDbPath, currentPath);
@@ -270,6 +280,8 @@ export async function restoreBackup(backupPath: string): Promise<RestoreResult> 
     } catch (swapErr) {
       // Rollback to original database on error
       if (preRestoreBackup && currentPath && fs.existsSync(preRestoreBackup)) {
+        try { fs.unlinkSync(`${currentPath}-wal`); } catch {}
+        try { fs.unlinkSync(`${currentPath}-shm`); } catch {}
         fs.copyFileSync(preRestoreBackup, currentPath);
         const rollbackDb = new Database(currentPath);
         rollbackDb.pragma("journal_mode = WAL");

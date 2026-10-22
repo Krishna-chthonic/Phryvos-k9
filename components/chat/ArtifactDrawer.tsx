@@ -3,15 +3,17 @@
 /**
  * Artifact Drawer — sandboxed iframe for executing agent-generated HTML/JS/React/Physics artifacts
  * Uses postMessage for bi-directional communication, isolates scripts via sandbox="allow-scripts"
+ * Dual Preview / Monospace Code tabs, export and download actions, error fallback.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { Eye, Code, Copy, Check, Download, AlertCircle, RefreshCw, X } from "lucide-react";
 
 export interface ArtifactItem {
   id: string;
   title: string;
-  type: "html" | "physics" | "react" | "svg";
+  type: "html" | "physics" | "react" | "svg" | "code";
   content: string;
   params?: Record<string, any>;
   createdAt: number;
@@ -31,8 +33,10 @@ export function ArtifactDrawer({
   className,
 }: ArtifactDrawerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [activeTab, setActiveTab] = useState<"preview" | "code">("preview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Generate sandboxed HTML with required CDN dependencies (Rapier3D, React, Tailwind)
   const generateSrcDoc = useCallback((item: ArtifactItem): string => {
@@ -60,7 +64,6 @@ export function ArtifactDrawer({
     const ctx = canvas.getContext('2d');
     let t = 0;
 
-    // Fallback animated mechanics simulation (Bead on rotating parabolic wire)
     function render() {
       t += 0.03;
       ctx.fillStyle = '#0a0a0a';
@@ -69,7 +72,6 @@ export function ArtifactDrawer({
       const cx = canvas.width / 2;
       const cy = canvas.height * 0.8;
 
-      // Draw rotating parabolic wire y = a*x^2
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -82,13 +84,11 @@ export function ArtifactDrawer({
       }
       ctx.stroke();
 
-      // Bead motion
       const beadX = 120 * Math.sin(t * 2);
       const beadY = 0.003 * beadX * beadX;
       const beadPx = cx + beadX * Math.cos(t * 0.5);
       const beadPy = cy - beadY;
 
-      // Draw bead
       ctx.fillStyle = '#22d3ee';
       ctx.shadowColor = '#22d3ee';
       ctx.shadowBlur = 10;
@@ -97,14 +97,13 @@ export function ArtifactDrawer({
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Vector arrows (Normal force, mg, Centrifugal)
-      ctx.strokeStyle = '#f43f5e'; // mg (red)
+      ctx.strokeStyle = '#f43f5e';
       ctx.beginPath();
       ctx.moveTo(beadPx, beadPy);
       ctx.lineTo(beadPx, beadPy + 40);
       ctx.stroke();
 
-      ctx.strokeStyle = '#a855f7'; // F_cf (purple)
+      ctx.strokeStyle = '#a855f7';
       ctx.beginPath();
       ctx.moveTo(beadPx, beadPy);
       ctx.lineTo(beadPx + beadX * 0.3 * Math.cos(t * 0.5), beadPy);
@@ -136,11 +135,10 @@ export function ArtifactDrawer({
     return item.content;
   }, []);
 
-  useEffect(() => {
-    if (!isOpen || !artifact || !iframeRef.current) return;
+  const renderIframe = useCallback(() => {
+    if (!artifact || !iframeRef.current) return;
     setLoading(true);
     setError(null);
-
     try {
       const srcDoc = generateSrcDoc(artifact);
       iframeRef.current.srcdoc = srcDoc;
@@ -149,59 +147,151 @@ export function ArtifactDrawer({
       setError(err?.message || "Failed to render artifact");
       setLoading(false);
     }
-  }, [isOpen, artifact, generateSrcDoc]);
+  }, [artifact, generateSrcDoc]);
+
+  useEffect(() => {
+    if (isOpen && artifact && activeTab === "preview") {
+      renderIframe();
+    }
+  }, [isOpen, artifact, activeTab, renderIframe]);
+
+  const handleCopyCode = async () => {
+    if (!artifact) return;
+    try {
+      await navigator.clipboard.writeText(artifact.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  const handleDownload = () => {
+    if (!artifact) return;
+    const blob = new Blob([artifact.content], {
+      type: artifact.type === "svg" ? "image/svg+xml" : "text/html;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ext = artifact.type === "svg" ? "svg" : artifact.type === "physics" ? "html" : "html";
+    a.download = `${artifact.title.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   if (!isOpen || !artifact) return null;
 
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-[540px] max-w-[90vw] bg-neutral-950/95 border-l border-neutral-800 backdrop-blur-md shadow-2xl z-50 flex flex-col transition-transform duration-300",
+        "fixed inset-y-0 right-0 w-[580px] max-w-[95vw] bg-neutral-950/95 border-l border-neutral-800 backdrop-blur-md shadow-2xl z-50 flex flex-col transition-transform duration-300",
         isOpen ? "translate-x-0" : "translate-x-full",
-        className
+        className,
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/60">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <h3 className="text-sm font-semibold text-neutral-200">{artifact.title}</h3>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 uppercase">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+          <h3 className="text-sm font-semibold text-neutral-200 truncate">{artifact.title}</h3>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 uppercase shrink-0">
             {artifact.type}
           </span>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-neutral-100 transition-colors"
-          aria-label="Close Artifact Drawer"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+
+        <div className="flex items-center gap-1">
+          {/* View Tab Buttons */}
+          <div className="flex items-center rounded-lg bg-neutral-900 border border-neutral-800 p-0.5 mr-2">
+            <button
+              onClick={() => setActiveTab("preview")}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                activeTab === "preview"
+                  ? "bg-neutral-800 text-neutral-100 shadow-sm"
+                  : "text-neutral-400 hover:text-neutral-200",
+              )}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Preview
+            </button>
+            <button
+              onClick={() => setActiveTab("code")}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                activeTab === "code"
+                  ? "bg-neutral-800 text-neutral-100 shadow-sm"
+                  : "text-neutral-400 hover:text-neutral-200",
+              )}
+            >
+              <Code className="w-3.5 h-3.5" />
+              Code
+            </button>
+          </div>
+
+          {/* Action buttons */}
+          <button
+            onClick={handleCopyCode}
+            title="Copy code"
+            className="p-1.5 rounded-md hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
+          >
+            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={handleDownload}
+            title="Download file"
+            className="p-1.5 rounded-md hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition-colors"
+            aria-label="Close Artifact Drawer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Body / Iframe sandbox */}
-      <div className="relative flex-1 bg-black overflow-hidden">
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/80 z-10">
-            <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      {/* Main Content Area */}
+      <div className="relative flex-1 bg-black overflow-hidden flex flex-col">
+        {activeTab === "preview" ? (
+          <>
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/80 z-10">
+                <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+
+            {error && (
+              <div className="p-4 m-4 rounded bg-rose-950/40 border border-rose-800 text-rose-300 text-xs font-mono flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>Execution failed: {error}</span>
+                </div>
+                <button
+                  onClick={renderIframe}
+                  className="flex items-center gap-1 px-2 py-1 bg-rose-900/50 hover:bg-rose-900 rounded text-rose-200 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            <iframe
+              ref={iframeRef}
+              sandbox="allow-scripts"
+              className="w-full h-full border-0"
+              title={artifact.title}
+            />
+          </>
+        ) : (
+          <div className="w-full h-full p-4 overflow-auto bg-neutral-950 text-neutral-300 font-mono text-xs leading-relaxed select-text">
+            <pre className="whitespace-pre-wrap">{artifact.content}</pre>
           </div>
         )}
-
-        {error && (
-          <div className="p-4 m-4 rounded bg-rose-950/40 border border-rose-800 text-rose-300 text-xs font-mono">
-            Error rendering artifact: {error}
-          </div>
-        )}
-
-        <iframe
-          ref={iframeRef}
-          sandbox="allow-scripts"
-          className="w-full h-full border-0"
-          title={artifact.title}
-        />
       </div>
     </div>
   );

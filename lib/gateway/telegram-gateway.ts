@@ -12,11 +12,20 @@
 
 import type Database from "better-sqlite3";
 import { getActiveMasterKey } from "@/lib/session/store";
-import { listDots, getDot, appendDotMessage, listDotTasks, listDotMessages } from "@/lib/dots-service";
+import {
+  listDots,
+  getDot,
+  appendDotMessage,
+  listDotTasks,
+  listDotMessages,
+  listDotSpaces,
+  formatSpacesContext,
+} from "@/lib/dots-service";
 import { createSession, getSession, listMessages, appendMessage } from "@/lib/chat-service";
 import { defaultProvider, createLlmClient } from "@/lib/providers-service";
 import { runAgentTurn } from "@/lib/agent/loop";
 import { ensureAgentTools } from "@/lib/agent/tools";
+import { resolveAllowedTools } from "@/lib/dots-runner";
 import { enhancePromptWithEcc } from "@/lib/ai/prompts/ecc-instincts";
 import { listWorktrees, getDotWorktreeInfo } from "@/lib/dots/worktree-service";
 import { addMemory, listMemories } from "@/lib/memory-service";
@@ -734,7 +743,9 @@ export class TelegramGatewayService {
 
         // 2. Load recent conversation history for memory continuity
         const dotHistory = listDotMessages(ctx, dot.id).slice(-8);
-        const systemPrompt = `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as coworker "${dot.name}" (${dot.role}). Working environment: "${dot.workingDirectory}". Enabled tools: ${dot.tools.join(", ")}. Provide concise, high-value responses over Telegram.`;
+        const spaces = listDotSpaces(ctx, dot.id);
+        const spacesContext = formatSpacesContext(spaces);
+        const systemPrompt = `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as coworker "${dot.name}" (${dot.role}). Working environment: "${dot.workingDirectory}". Enabled tools: ${dot.tools.join(", ")}. Provide concise, high-value responses over Telegram.${spacesContext}`;
 
         const messages: UnifiedMessage[] = [
           { role: "system", content: systemPrompt },
@@ -745,12 +756,15 @@ export class TelegramGatewayService {
           { role: "user", content: prompt || "Hello!" },
         ];
 
+        const allowedTools = resolveAllowedTools(dot.tools);
+
         // 3. Run Agent loop
         const result = await runAgentTurn({
           db,
           key,
           client,
           model,
+          allowedTools,
           initialMessages: messages,
           maxSteps: 8,
           providerTimeoutMs: 90_000,

@@ -104,6 +104,8 @@ export const chatSessions = sqliteTable("chat_sessions", {
   titleTag: blob("title_tag"),
   providerId: integer("provider_id").references(() => aiProviders.id),
   model: text("model").notNull(),
+  mode: text("mode"),
+  effort: text("effort"),
   summaryEnc: blob("summary_enc"),
   summaryNonce: blob("summary_nonce"),
   summaryTag: blob("summary_tag"),
@@ -129,6 +131,8 @@ export const chatMessages = sqliteTable(
     toolCallId: text("tool_call_id"),
     editedAt: integer("edited_at"),
     deleted: integer("deleted", { mode: "boolean" }).notNull().default(false),
+    feedback: text("feedback"), // 'helpful' | 'unhelpful' | null
+    telemetry: text("telemetry"), // JSON string of TurnTelemetry
     createdAt: integer("created_at").notNull(),
   },
   (t) => [
@@ -288,9 +292,31 @@ export const memories = sqliteTable("memories", {
   id: integer("id").primaryKey(),
   point: text("point").notNull(),
   category: text("category").default("fact"),
+  sourceSessionId: text("source_session_id"),
+  source: text("source").default("user"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+export const artifacts = sqliteTable(
+  "artifacts",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: "cascade" }),
+    messageId: text("message_id"),
+    title: text("title").notNull(),
+    type: text("type").notNull(), // 'html' | 'physics' | 'react' | 'svg' | 'code'
+    content: text("content").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    index("idx_artifacts_session").on(t.sessionId),
+    index("idx_artifacts_created").on(t.createdAt),
+  ],
+);
 
 // FSRS Spaced Repetition Cards
 export const fsrsCards = sqliteTable(
@@ -389,6 +415,8 @@ export const dotMessages = sqliteTable(
     dotId: text("dot_id").notNull().references(() => dots.id, { onDelete: "cascade" }),
     role: text("role").notNull(), // "user" | "assistant" | "system" | "tool"
     content: text("content").notNull(),
+    toolCalls: text("tool_calls"), // JSON array of ToolCallPart for canonical assistant tool turns
+    toolCallId: text("tool_call_id"), // Matching call ID for tool result turns
     toolName: text("tool_name"),
     toolArgs: text("tool_args"),
     toolResult: text("tool_result"),
@@ -423,6 +451,8 @@ export const dotTasks = sqliteTable(
     lastRunAt: integer("last_run_at"),
     lastResult: text("last_result"),
     error: text("error"),
+    retryCount: integer("retry_count").notNull().default(0),
+    maxRetries: integer("max_retries").notNull().default(3),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },

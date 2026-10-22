@@ -31,7 +31,7 @@ const WORKTREE_BASE_DIR = path.join(REPO_ROOT, ".phryvos", "worktrees");
  * Sanitizes Dot name to safe git branch & folder name
  */
 export function sanitizeDotSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9_-]/g, "_").replace(/^_+|_+$/g, "") || "dot";
+  return name.toLowerCase().replace(/[^a-z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "dot";
 }
 
 /**
@@ -172,6 +172,10 @@ export async function mergeDotWorktree(
   dotName: string,
   targetBranch = "main"
 ): Promise<{ success: boolean; message: string }> {
+  if (!targetBranch || !/^[a-zA-Z0-9_./-]+$/.test(targetBranch)) {
+    return { success: false, message: `Invalid target branch name "${targetBranch}"` };
+  }
+
   const slug = sanitizeDotSlug(dotName);
   const branchName = `dot/${slug}`;
   const worktreePath = path.join(WORKTREE_BASE_DIR, slug);

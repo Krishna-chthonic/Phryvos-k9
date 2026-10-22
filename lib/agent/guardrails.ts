@@ -140,6 +140,11 @@ function settle(id: string, decision: ApprovalDecision): void {
   if (!a || a.state !== "pending") return;
   a.state = decision;
   a.resolver?.(decision);
+  // Auto-evict settled approval after 60s grace period to prevent unbounded memory growth while supporting idempotent retries
+  const timer = setTimeout(() => {
+    approvals.delete(id);
+  }, 60_000);
+  timer.unref?.();
 }
 
 /** called by PUT /api/chat/approvals/:id */
@@ -150,11 +155,15 @@ export function resolveApproval(
 ): { ok: boolean; error?: string } {
   const a = approvals.get(id);
   if (!a) return { ok: false, error: "Unknown or already-resolved approval" };
-  if (a.state !== "pending") return { ok: false, error: `Already ${a.state}` };
+  const targetState = decision === "allow" ? "allowed" : "denied";
+  // Always verify expectedHash first, even on idempotent retry calls
   if (expectedHash && a.actionHash && expectedHash !== a.actionHash) {
     return { ok: false, error: "Action hash mismatch: operation parameters do not match approval" };
   }
-  settle(id, decision === "allow" ? "allowed" : "denied");
+  // Idempotent retry: if already resolved to the exact same decision, report ok: true
+  if (a.state === targetState) return { ok: true };
+  if (a.state !== "pending") return { ok: false, error: `Already ${a.state}` };
+  settle(id, targetState);
   return { ok: true };
 }
 
@@ -164,6 +173,95 @@ export function getApproval(id: string): PendingApproval | null {
 
 export function pendingApprovals(): PendingApproval[] {
   return [...approvals.values()].filter((a) => a.state === "pending");
+}
+
+export enum ToolRiskLevel {
+  CRITICAL = "critical",
+  HIGH = "high",
+  MEDIUM = "medium",
+  LOW = "low",
+}
+
+export function getToolRiskLevel(toolName: string): ToolRiskLevel {
+  const name = toolName.toLowerCase();
+  if (
+    name === "terminal" ||
+    name === "bash" ||
+    name.includes("delete_database") ||
+    name.includes("drop_") ||
+    name.includes("destroy") ||
+    name.includes("exec")
+  ) {
+    return ToolRiskLevel.CRITICAL;
+  }
+
+  if (
+    name.includes("write") ||
+    name.includes("create") ||
+    name.includes("delete") ||
+    name.includes("remove") ||
+    name.includes("patch") ||
+    name.includes("update") ||
+    name.includes("move")
+  ) {
+    return ToolRiskLevel.HIGH;
+  }
+
+  if (
+    name.includes("fetch") ||
+    name.includes("search") ||
+    name.includes("network") ||
+    name.includes("download")
+  ) {
+    return ToolRiskLevel.MEDIUM;
+  }
+
+  return ToolRiskLevel.LOW;
+}
+
+export function checkPathContainment(
+  pathToCheck: string,
+  baseDir = "/root/phryvos-k9",
+): { allowed: boolean; reason?: string } {
+  if (!pathToCheck || typeof pathToCheck !== "string") {
+    return { allowed: false, reason: "Path cannot be empty" };
+  }
+
+  const normalized = pathToCheck.replace(/\\/g, "/");
+
+  // Check for traversal
+  if (
+    normalized.includes("../") ||
+    normalized.includes("/..") ||
+    normalized === ".."
+  ) {
+    return { allowed: false, reason: "Directory traversal sequences (..) are forbidden" };
+  }
+
+  // Check for sensitive OS and repository internals
+  const lower = normalized.toLowerCase();
+  const forbiddenPrefixes = [
+    "/etc",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/boot",
+    "/var/run",
+    "/root/.ssh",
+    "/root/.gnupg",
+  ];
+
+  for (const prefix of forbiddenPrefixes) {
+    if (lower === prefix || lower.startsWith(prefix + "/")) {
+      return { allowed: false, reason: `Access to system directory ${prefix} is restricted` };
+    }
+  }
+
+  if (lower.includes(".git/") || lower.endsWith("/.git") || lower === ".git") {
+    return { allowed: false, reason: "Direct modification of .git directory is forbidden" };
+  }
+
+  return { allowed: true };
 }
 
 /** test hook */

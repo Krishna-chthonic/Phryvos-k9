@@ -34,6 +34,7 @@ export async function GET() {
 const CreateSchema = z.object({
   point: z.string().min(1).max(2000),
   category: z.string().optional(),
+  sourceSessionId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -47,7 +48,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const memory = addMemory(ctx.db, body.data.point, body.data.category);
+    const memory = addMemory(ctx.db, body.data.point, body.data.category, {
+      sourceSessionId: body.data.sourceSessionId,
+      source: "user",
+    });
     return Response.json({ memory }, { status: 201 });
   } catch (e) {
     const auth = vaultGuardResponse(e);

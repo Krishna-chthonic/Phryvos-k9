@@ -69,6 +69,11 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
     e.preventDefault();
     if (!prompt.trim() || submitting) return;
 
+    if (intervalSeconds !== null && (intervalSeconds < 60 || intervalSeconds > 31536000)) {
+      alert("Interval must be at least 60 seconds (1 minute) and at most 1 year.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/dots/${dot.id}/tasks`, {
@@ -322,7 +327,19 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
                               {task.nextRunAt && !isPaused && (
                                 <span>• {formatRelativeNext(task.nextRunAt)}</span>
                               )}
+                              {task.retryCount > 0 && (
+                                <span className="inline-flex items-center rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-mono font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                  Retry {task.retryCount}/{task.maxRetries}
+                                </span>
+                              )}
                             </div>
+
+                            {task.error && (
+                              <div className="flex items-center gap-1 text-[10px] text-red-500 dark:text-red-400 bg-red-500/10 p-1.5 rounded-lg border border-red-500/20">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span className="line-clamp-2">{task.error}</span>
+                              </div>
+                            )}
 
                             {task.lastResult && (
                               <p className="text-[10px] text-zinc-500 font-mono bg-zinc-50 dark:bg-zinc-950/60 p-1.5 rounded-lg border border-zinc-200/50 dark:border-zinc-800/50 line-clamp-2">
@@ -419,6 +436,11 @@ export function DotTasksPanel({ dot, onRefreshMessages }: DotTasksPanelProps) {
                       >
                         {task.status}
                       </span>
+                      {task.retryCount > 0 && (
+                        <span className="rounded-full px-2 py-0.5 text-[9px] font-mono font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/40 dark:border-amber-700/40">
+                          Retry {task.retryCount}/{task.maxRetries}
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500 flex-wrap">

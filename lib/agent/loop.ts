@@ -77,6 +77,8 @@ export interface AgentResult {
   finish: "stop" | "tool_calls" | "length" | "error" | "capped";
   toolSteps: number;
   tokensUsed?: number;
+  promptTokens?: number;
+  completionTokens?: number;
 }
 
 function summarizeToolArgs(tool: string, args: Record<string, unknown>): string {
@@ -130,6 +132,8 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
   let toolSteps = 0;
   let capped = false;
   let totalTokensUsed = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
   const tokenBudget = deps.maxTokensBudget ?? 80_000;
 
   const emitThoughtDelta = (chunk: string) => {
@@ -175,7 +179,11 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
       "provider",
     );
 
-    const stepTokens = (turn.usage?.promptTokens ?? 0) + (turn.usage?.completionTokens ?? 0);
+    const promptT = turn.usage?.promptTokens ?? 0;
+    const completionT = turn.usage?.completionTokens ?? 0;
+    totalPromptTokens += promptT;
+    totalCompletionTokens += completionT;
+    const stepTokens = promptT + completionT;
     totalTokensUsed += stepTokens;
     if (totalTokensUsed >= tokenBudget) {
       capped = true;
@@ -183,7 +191,14 @@ export async function runAgentTurn(deps: LoopDeps): Promise<AgentResult> {
       if (turn.toolCalls.length === 0) {
         closeThoughtBlock();
         deps.appendAssistant(turn.text || "(Budget cap reached)", allExecutedTools);
-        return { text: turn.text, finish: "capped", toolSteps, tokensUsed: totalTokensUsed };
+        return {
+          text: turn.text,
+          finish: "capped",
+          toolSteps,
+          tokensUsed: totalTokensUsed,
+          promptTokens: totalPromptTokens,
+          completionTokens: totalCompletionTokens,
+        };
       }
     }
 
@@ -226,7 +241,14 @@ MANDATORY NEXT STEPS:
       const rawText = (accumulatedThought ? accumulatedThought : "") + (turn.text || turnText);
       const finalText = await dshChassis.runAfterTurnHooks(ctx, rawText);
       deps.appendAssistant(finalText, allExecutedTools);
-      return { text: finalText, finish: turn.finish === "tool_calls" ? "stop" : turn.finish, toolSteps };
+      return {
+        text: finalText,
+        finish: turn.finish === "tool_calls" ? "stop" : turn.finish,
+        toolSteps,
+        tokensUsed: totalTokensUsed,
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+      };
     }
 
     // Step cap: after maxSteps tool rounds, force a plain answer.
@@ -242,10 +264,22 @@ MANDATORY NEXT STEPS:
         providerTimeout,
         "provider",
       );
+      const promptT = final.usage?.promptTokens ?? 0;
+      const completionT = final.usage?.completionTokens ?? 0;
+      totalPromptTokens += promptT;
+      totalCompletionTokens += completionT;
+      totalTokensUsed += promptT + completionT;
       const rawText = (accumulatedThought ? accumulatedThought : "") + final.text;
       const finalText = await dshChassis.runAfterTurnHooks(ctx, rawText);
       deps.appendAssistant(finalText, allExecutedTools);
-      return { text: finalText, finish: "capped", toolSteps };
+      return {
+        text: finalText,
+        finish: "capped",
+        toolSteps,
+        tokensUsed: totalTokensUsed,
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+      };
     }
 
     for (const tc of turn.toolCalls) {
@@ -372,5 +406,12 @@ MANDATORY NEXT STEPS:
   closeThoughtBlock();
   const finalText = (accumulatedThought ? accumulatedThought : "") + "(stopped)";
   deps.appendAssistant(finalText, allExecutedTools);
-  return { text: finalText, finish: capped ? "capped" : "stop", toolSteps, tokensUsed: totalTokensUsed };
+  return {
+    text: finalText,
+    finish: capped ? "capped" : "stop",
+    toolSteps,
+    tokensUsed: totalTokensUsed,
+    promptTokens: totalPromptTokens,
+    completionTokens: totalCompletionTokens,
+  };
 }

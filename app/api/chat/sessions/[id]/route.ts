@@ -6,6 +6,7 @@ import {
   getSession,
   listMessages,
   renameSession,
+  updateSession,
 } from "@/lib/chat-service";
 
 function notFound(id: string): Response {
@@ -49,6 +50,8 @@ const PatchBody = z.object({
   title: z.string().max(120).optional(),
   model: z.string().min(1).optional(),
   providerId: z.number().int().positive().nullable().optional(),
+  mode: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
 });
 
 export async function PATCH(
@@ -63,22 +66,14 @@ export async function PATCH(
       { status: 400 },
     );
   return guard(id, (ctx) => {
-    const s = getSession(ctx, id);
-    if (body.data.title !== undefined) renameSession(ctx, id, body.data.title);
-    const now = Date.now();
-    if (body.data.model !== undefined || body.data.providerId !== undefined) {
-      ctx.db
-        .prepare(
-          "UPDATE chat_sessions SET model = ?, provider_id = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(
-          body.data.model ?? s.model,
-          body.data.providerId === undefined ? s.providerId : body.data.providerId,
-          now,
-          id,
-        );
-    }
-    return Response.json({ session: getSession(ctx, id) });
+    const updated = updateSession(ctx, id, {
+      title: body.data.title,
+      model: body.data.model,
+      providerId: body.data.providerId,
+      mode: body.data.mode,
+      effort: body.data.effort,
+    });
+    return Response.json({ session: updated });
   });
 }
 

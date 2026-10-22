@@ -12,9 +12,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; messageId: string }> },
 ) {
   const { id: sessionId, messageId } = await params;
-  const body = z.object({ content: z.string().min(1) }).safeParse(
-    await req.json().catch(() => null),
-  );
+  const body = z
+    .object({
+      content: z.string().min(1),
+      truncate: z.boolean().optional(),
+    })
+    .safeParse(await req.json().catch(() => null));
   if (!body.success)
     return Response.json(
       { error: { code: "invalid_body", message: "Bad {content}" } },
@@ -22,7 +25,8 @@ export async function PATCH(
     );
   try {
     const ctx = await requireVault();
-    editUserMessage(ctx, sessionId, messageId, body.data.content);
+    const truncate = body.data.truncate ?? true;
+    editUserMessage(ctx, sessionId, messageId, body.data.content, truncate);
     return Response.json({ messages: listMessages(ctx, sessionId) });
   } catch (e) {
     const auth = vaultGuardResponse(e);

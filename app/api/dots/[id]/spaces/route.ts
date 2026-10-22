@@ -38,6 +38,9 @@ export async function POST(
   } catch (e) {
     const auth = vaultGuardResponse(e);
     if (auth) return auth;
+    if (e instanceof Error && e.message.startsWith("Forbidden:")) {
+      return Response.json({ error: { code: "forbidden", message: e.message } }, { status: 403 });
+    }
     if (e instanceof z.ZodError) {
       return Response.json({ error: { code: "invalid_input", issues: e.issues } }, { status: 400 });
     }
@@ -57,11 +60,14 @@ export async function DELETE(
     if (!spaceId) {
       return Response.json({ error: { code: "missing_param", message: "spaceId is required" } }, { status: 400 });
     }
-    deleteDotSpace(ctx, spaceId);
+    deleteDotSpace(ctx, spaceId, dotId);
     return Response.json({ ok: true });
   } catch (e) {
     const auth = vaultGuardResponse(e);
     if (auth) return auth;
+    if (e instanceof Error && e.message.startsWith("Forbidden:")) {
+      return Response.json({ error: { code: "forbidden", message: e.message } }, { status: 403 });
+    }
     return internalResponse(e);
   }
 }

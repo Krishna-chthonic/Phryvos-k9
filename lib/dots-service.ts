@@ -17,11 +17,24 @@ export interface DotDto {
   updatedAt: number;
 }
 
+export interface DotToolCall {
+  id: string;
+  type?: string;
+  function?: {
+    name: string;
+    arguments: string;
+  };
+  name?: string;
+  args?: Record<string, unknown>;
+}
+
 export interface DotMessageDto {
   id: string;
   dotId: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  toolCalls?: DotToolCall[] | null;
+  toolCallId?: string | null;
   toolName?: string | null;
   toolArgs?: string | null;
   toolResult?: string | null;
@@ -48,6 +61,8 @@ export interface DotTaskDto {
   lastRunAt: number | null;
   lastResult: string | null;
   error: string | null;
+  retryCount: number;
+  maxRetries: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -83,6 +98,8 @@ interface RawDotMessageRow {
   dot_id: string;
   role: string;
   content: string;
+  tool_calls: string | null;
+  tool_call_id: string | null;
   tool_name: string | null;
   tool_args: string | null;
   tool_result: string | null;
@@ -220,11 +237,12 @@ export function deleteDot(ctx: VaultCtx, id: string): boolean {
   ctx.db.prepare("DELETE FROM dots WHERE id = ?").run(id);
   ctx.db.prepare("DELETE FROM dot_messages WHERE dot_id = ?").run(id);
   ctx.db.prepare("DELETE FROM dot_spaces WHERE dot_id = ?").run(id);
+  ctx.db.prepare("DELETE FROM dot_tasks WHERE dot_id = ?").run(id);
   return true;
 }
 
 /**
- * List messages for a Dot.
+ * List messages for a Dot with canonical tool-call history.
  */
 export function listDotMessages(ctx: VaultCtx, dotId: string): DotMessageDto[] {
   const stmt = ctx.db.prepare("SELECT * FROM dot_messages WHERE dot_id = ? ORDER BY created_at ASC");
@@ -235,6 +253,8 @@ export function listDotMessages(ctx: VaultCtx, dotId: string): DotMessageDto[] {
     dotId: r.dot_id,
     role: r.role as DotMessageDto["role"],
     content: r.content,
+    toolCalls: safeParseJson<DotToolCall[] | null>(r.tool_calls, null),
+    toolCallId: r.tool_call_id,
     toolName: r.tool_name,
     toolArgs: r.tool_args,
     toolResult: r.tool_result,
@@ -244,7 +264,7 @@ export function listDotMessages(ctx: VaultCtx, dotId: string): DotMessageDto[] {
 }
 
 /**
- * Append message to a Dot's conversation.
+ * Append message to a Dot's conversation with canonical tool call linkage.
  */
 export function appendDotMessage(
   ctx: VaultCtx,
@@ -252,18 +272,21 @@ export function appendDotMessage(
   msg: {
     role: "user" | "assistant" | "system" | "tool";
     content: string;
-    toolName?: string;
-    toolArgs?: string;
-    toolResult?: string;
+    toolCalls?: DotToolCall[] | null;
+    toolCallId?: string | null;
+    toolName?: string | null;
+    toolArgs?: string | null;
+    toolResult?: string | null;
     status?: string;
   }
 ): DotMessageDto {
   const id = `msg_${crypto.randomUUID()}`;
   const now = Date.now();
+  const toolCallsJson = msg.toolCalls ? JSON.stringify(msg.toolCalls) : null;
 
   const stmt = ctx.db.prepare(`
-    INSERT INTO dot_messages (id, dot_id, role, content, tool_name, tool_args, tool_result, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO dot_messages (id, dot_id, role, content, tool_calls, tool_call_id, tool_name, tool_args, tool_result, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -271,6 +294,8 @@ export function appendDotMessage(
     dotId,
     msg.role,
     msg.content,
+    toolCallsJson,
+    msg.toolCallId || null,
     msg.toolName || null,
     msg.toolArgs || null,
     msg.toolResult || null,
@@ -283,12 +308,26 @@ export function appendDotMessage(
     dotId,
     role: msg.role,
     content: msg.content,
+    toolCalls: msg.toolCalls ?? null,
+    toolCallId: msg.toolCallId ?? null,
     toolName: msg.toolName || null,
     toolArgs: msg.toolArgs || null,
     toolResult: msg.toolResult || null,
     status: msg.status || "done",
     createdAt: now,
   };
+}
+
+/**
+ * Format Dot Spaces documents into system prompt knowledge base context.
+ */
+export function formatSpacesContext(spaces: DotSpaceDto[]): string {
+  if (!spaces || spaces.length === 0) return "";
+  const header = "\n\n# Active Dot Spaces Knowledge Base\n";
+  const docs = spaces
+    .map((s) => `### ${s.title}\n${s.content}`)
+    .join("\n\n");
+  return `${header}${docs}\n`;
 }
 
 /**
@@ -321,6 +360,9 @@ export function saveDotSpace(
 
   const existing = ctx.db.prepare("SELECT * FROM dot_spaces WHERE id = ?").get(id) as RawDotSpaceRow | undefined;
   if (existing) {
+    if (existing.dot_id !== dotId) {
+      throw new Error(`Forbidden: Space "${id}" belongs to another Dot ("${existing.dot_id}"), ownership check failed.`);
+    }
     ctx.db
       .prepare("UPDATE dot_spaces SET title = ?, content = ?, updated_at = ? WHERE id = ?")
       .run(space.title.trim(), space.content, now, id);
@@ -350,9 +392,18 @@ export function saveDotSpace(
 }
 
 /**
- * Delete a Dot Space.
+ * Delete a Dot Space with strict ownership verification.
  */
-export function deleteDotSpace(ctx: VaultCtx, spaceId: string): boolean {
+export function deleteDotSpace(ctx: VaultCtx, spaceId: string, dotId?: string): boolean {
+  if (dotId) {
+    const existing = ctx.db.prepare("SELECT * FROM dot_spaces WHERE id = ?").get(spaceId) as RawDotSpaceRow | undefined;
+    if (!existing) return false;
+    if (existing.dot_id !== dotId) {
+      throw new Error(`Forbidden: Space "${spaceId}" belongs to another Dot ("${existing.dot_id}"), ownership check failed.`);
+    }
+    ctx.db.prepare("DELETE FROM dot_spaces WHERE id = ? AND dot_id = ?").run(spaceId, dotId);
+    return true;
+  }
   ctx.db.prepare("DELETE FROM dot_spaces WHERE id = ?").run(spaceId);
   return true;
 }
@@ -367,6 +418,8 @@ interface RawDotTaskRow {
   last_run_at: number | null;
   last_result: string | null;
   error: string | null;
+  retry_count: number;
+  max_retries: number;
   created_at: number;
   updated_at: number;
 }
@@ -382,14 +435,21 @@ function toTaskDto(r: RawDotTaskRow): DotTaskDto {
     lastRunAt: r.last_run_at,
     lastResult: r.last_result,
     error: r.error,
+    retryCount: r.retry_count ?? 0,
+    maxRetries: r.max_retries ?? 3,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
 }
 
-export function listDotTasks(ctx: VaultCtx, dotId: string): DotTaskDto[] {
-  const stmt = ctx.db.prepare("SELECT * FROM dot_tasks WHERE dot_id = ? ORDER BY created_at DESC");
-  const rows = stmt.all(dotId) as RawDotTaskRow[];
+export function listDotTasks(ctx: VaultCtx, dotId?: string): DotTaskDto[] {
+  if (dotId && dotId.trim() !== "") {
+    const stmt = ctx.db.prepare("SELECT * FROM dot_tasks WHERE dot_id = ? ORDER BY created_at DESC");
+    const rows = stmt.all(dotId.trim()) as RawDotTaskRow[];
+    return rows.map(toTaskDto);
+  }
+  const stmt = ctx.db.prepare("SELECT * FROM dot_tasks ORDER BY created_at DESC");
+  const rows = stmt.all() as RawDotTaskRow[];
   return rows.map(toTaskDto);
 }
 
@@ -405,18 +465,20 @@ export function createDotTask(
     prompt: string;
     intervalSeconds?: number | null;
     nextRunAt?: number | null;
+    maxRetries?: number;
   }
 ): DotTaskDto {
   const now = Date.now();
   const id = `task_${crypto.randomUUID().slice(0, 8)}`;
   const nextRunAt = input.nextRunAt ?? (input.intervalSeconds ? now + input.intervalSeconds * 1000 : now);
+  const maxRetries = input.maxRetries ?? 3;
 
   ctx.db
     .prepare(`
-      INSERT INTO dot_tasks (id, dot_id, prompt, status, interval_seconds, next_run_at, last_run_at, last_result, error, created_at, updated_at)
-      VALUES (?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, ?, ?)
+      INSERT INTO dot_tasks (id, dot_id, prompt, status, interval_seconds, next_run_at, last_run_at, last_result, error, retry_count, max_retries, created_at, updated_at)
+      VALUES (?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, 0, ?, ?, ?)
     `)
-    .run(id, dotId, input.prompt.trim(), input.intervalSeconds ?? null, nextRunAt, now, now);
+    .run(id, dotId, input.prompt.trim(), input.intervalSeconds ?? null, nextRunAt, maxRetries, now, now);
 
   return {
     id,
@@ -428,6 +490,8 @@ export function createDotTask(
     lastRunAt: null,
     lastResult: null,
     error: null,
+    retryCount: 0,
+    maxRetries,
     createdAt: now,
     updatedAt: now,
   };
@@ -436,10 +500,14 @@ export function createDotTask(
 export function updateDotTask(
   ctx: VaultCtx,
   taskId: string,
-  patch: Partial<DotTaskDto>
+  patch: Partial<DotTaskDto>,
+  dotId?: string
 ): DotTaskDto | null {
   const existing = getDotTask(ctx, taskId);
   if (!existing) return null;
+  if (dotId && existing.dotId !== dotId) {
+    throw new Error(`Forbidden: Task "${taskId}" belongs to another Dot ("${existing.dotId}"), ownership check failed.`);
+  }
 
   const now = Date.now();
   const next = { ...existing, ...patch, updatedAt: now };
@@ -465,33 +533,49 @@ export function updateDotTask(
   return next;
 }
 
-export function deleteDotTask(ctx: VaultCtx, taskId: string): boolean {
+export function deleteDotTask(ctx: VaultCtx, taskId: string, dotId?: string): boolean {
+  if (dotId) {
+    const existing = getDotTask(ctx, taskId);
+    if (!existing) return false;
+    if (existing.dotId !== dotId) {
+      throw new Error(`Forbidden: Task "${taskId}" belongs to another Dot ("${existing.dotId}"), ownership check failed.`);
+    }
+    ctx.db.prepare("DELETE FROM dot_tasks WHERE id = ? AND dot_id = ?").run(taskId, dotId);
+    return true;
+  }
   ctx.db.prepare("DELETE FROM dot_tasks WHERE id = ?").run(taskId);
   return true;
 }
 
 /**
- * Claim due background task atomically.
+ * Claim due background task atomically using SQLite transaction.
  */
 export function claimDueDotTask(db: Database.Database): { task: DotTaskDto; dot: DotDto } | null {
   const now = Date.now();
-  const row = db
-    .prepare(`
-      SELECT * FROM dot_tasks
-      WHERE status NOT IN ('paused', 'running') AND next_run_at IS NOT NULL AND next_run_at <= ?
-      ORDER BY next_run_at ASC
-      LIMIT 1
-    `)
-    .get(now) as RawDotTaskRow | undefined;
+  const claimTx = db.transaction(() => {
+    const row = db
+      .prepare(`
+        SELECT * FROM dot_tasks
+        WHERE status NOT IN ('paused', 'running', 'failed') AND next_run_at IS NOT NULL AND next_run_at <= ?
+        ORDER BY next_run_at ASC
+        LIMIT 1
+      `)
+      .get(now) as RawDotTaskRow | undefined;
 
-  if (!row) return null;
+    if (!row) return null;
 
-  // Mark running atomically
-  db.prepare("UPDATE dot_tasks SET status = 'running', updated_at = ? WHERE id = ?").run(now, row.id);
+    db.prepare("UPDATE dot_tasks SET status = 'running', last_run_at = ?, updated_at = ? WHERE id = ?").run(now, now, row.id);
 
-  const dotRow = db.prepare("SELECT * FROM dots WHERE id = ?").get(row.dot_id) as RawDotRow | undefined;
-  if (!dotRow) return null;
+    const dotRow = db.prepare("SELECT * FROM dots WHERE id = ?").get(row.dot_id) as RawDotRow | undefined;
+    if (!dotRow) return null;
 
+    return { row, dotRow };
+  });
+
+  const claimed = claimTx();
+  if (!claimed) return null;
+
+  const { row, dotRow } = claimed;
   const dot: DotDto = {
     id: dotRow.id,
     name: dotRow.name,
@@ -512,6 +596,7 @@ export function claimDueDotTask(db: Database.Database): { task: DotTaskDto; dot:
 
 /**
  * Complete background task and schedule next occurrence if repeating.
+ * Supports exponential retry backoff on failures up to max_retries.
  */
 export function completeDotTask(
   db: Database.Database,
@@ -523,23 +608,44 @@ export function completeDotTask(
   if (!row) return;
 
   if (outcome.error) {
-    db.prepare(`
-      UPDATE dot_tasks
-      SET status = 'failed', error = ?, last_run_at = ?, updated_at = ?
-      WHERE id = ?
-    `).run(outcome.error, now, now, taskId);
+    const currentRetries = row.retry_count ?? 0;
+    const nextRetry = currentRetries + 1;
+    const maxRetries = row.max_retries ?? 3;
+
+    if (nextRetry >= maxRetries) {
+      // Exceeded max retries: mark as failed
+      db.prepare(`
+        UPDATE dot_tasks
+        SET status = 'failed', retry_count = ?, error = ?, last_run_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run(nextRetry, outcome.error, now, now, taskId);
+    } else {
+      // Exponential backoff with jitter: base 5s * 2^(retry-1) + jitter
+      const baseDelayMs = 5000;
+      const exponentialDelay = baseDelayMs * Math.pow(2, nextRetry - 1);
+      const jitter = Math.floor(Math.random() * 1000);
+      const delayMs = Math.min(3600_000, exponentialDelay + jitter);
+      const nextRunAt = now + delayMs;
+
+      db.prepare(`
+        UPDATE dot_tasks
+        SET status = 'queued', retry_count = ?, next_run_at = ?, error = ?, last_run_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run(nextRetry, nextRunAt, outcome.error, now, now, taskId);
+    }
     return;
   }
 
+  // Success: reset retry_count to 0
   const interval = row.interval_seconds;
   const nextRunAt = interval && interval > 0 ? now + interval * 1000 : null;
   const nextStatus = interval && interval > 0 ? "queued" : "completed";
 
   db.prepare(`
     UPDATE dot_tasks
-    SET status = ?, next_run_at = ?, last_run_at = ?, last_result = ?, error = NULL, updated_at = ?
+    SET status = ?, retry_count = 0, next_run_at = ?, last_run_at = ?, last_result = ?, error = NULL, updated_at = ?
     WHERE id = ?
-  `).run(nextStatus, nextRunAt, now, outcome.resultText ?? null, now, taskId);
+  `).run(nextStatus, nextRunAt, now, outcome.resultText || null, now, taskId);
 }
 
 function safeParseJson<T>(raw: string | null | undefined, fallback: T): T {

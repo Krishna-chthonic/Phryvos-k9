@@ -5,7 +5,7 @@ import { dotRunner } from "@/lib/dots-runner";
 
 const CreateTaskSchema = z.object({
   prompt: z.string().min(1),
-  intervalSeconds: z.number().nullable().optional(),
+  intervalSeconds: z.number().int().min(60).max(31536000).nullable().optional(),
   nextRunAt: z.number().nullable().optional(),
 });
 

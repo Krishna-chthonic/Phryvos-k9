@@ -33,8 +33,29 @@ export function DotsApp() {
     tool: string;
     description: string;
   } | null>(null);
+  const activeStreamAbortRef = React.useRef<AbortController | null>(null);
 
   const activeDot = dots.find((d) => d.id === selectedDotId) || dots[0] || null;
+
+  // Stream crosstalk prevention on Dot switch (D-12)
+  useEffect(() => {
+    if (activeStreamAbortRef.current) {
+      activeStreamAbortRef.current.abort();
+      activeStreamAbortRef.current = null;
+    }
+    setStreaming(false);
+    setStreamText("");
+    setPendingApproval(null);
+  }, [activeDot?.id]);
+
+  // Clean unmount (D-12)
+  useEffect(() => {
+    return () => {
+      if (activeStreamAbortRef.current) {
+        activeStreamAbortRef.current.abort();
+      }
+    };
+  }, []);
 
   // Load providers
   useEffect(() => {
@@ -54,12 +75,19 @@ export function DotsApp() {
       .catch((e) => console.error("Failed to load providers", e));
   }, []);
 
-  // Sync model with activeDot
+  // Sync model with activeDot (D-13)
   useEffect(() => {
-    if (activeDot && activeDot.model && activeDot.model !== "auto") {
-      setSelectedModel(activeDot.model);
+    if (activeDot) {
+      if (activeDot.model && activeDot.model !== "auto") {
+        setSelectedModel(activeDot.model);
+      } else if (providers.length > 0) {
+        const p = providers.find((x) => x.id === providerId) ?? providers[0];
+        if (p?.models?.[0]) {
+          setSelectedModel(p.models[0]);
+        }
+      }
     }
-  }, [activeDot?.id, activeDot?.model]);
+  }, [activeDot?.id, activeDot?.model, providers, providerId]);
 
   // Load all dots
   const loadDots = useCallback(async () => {
@@ -127,6 +155,13 @@ export function DotsApp() {
   const handleSendMessage = async (content: string) => {
     if (!activeDot || streaming) return;
 
+    // Abort any prior stream before starting a new one (D-12)
+    if (activeStreamAbortRef.current) {
+      activeStreamAbortRef.current.abort();
+    }
+    const ac = new AbortController();
+    activeStreamAbortRef.current = ac;
+
     // Optimistic user message
     const tempId = `temp_${Date.now()}`;
     const userMsg: DotMessageDto = {
@@ -145,6 +180,7 @@ export function DotsApp() {
       const res = await fetch(`/api/dots/${activeDot.id}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           content,
           model: selectedModel || undefined,
@@ -231,6 +267,10 @@ export function DotsApp() {
       await loadDotDetails(activeDot.id);
       await loadDots();
     } catch (e) {
+      if ((e as any)?.name === "AbortError") {
+        // Stream aborted due to switching dots or intentional cancel - ignore cleanly (D-12)
+        return;
+      }
       console.error("Chat error", e);
       setMessages((prev) => [
         ...prev,

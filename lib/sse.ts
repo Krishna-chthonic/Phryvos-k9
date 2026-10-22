@@ -7,6 +7,27 @@ export interface SseEvent {
   data: string;
 }
 
+/**
+ * Parses an individual SSE frame (block of event/data lines).
+ * Handles CRLF and LF, multi-line data, and returns null if empty.
+ */
+export function parseSseFrame(frame: string): SseEvent | null {
+  const normalized = frame.replace(/\r\n/g, "\n");
+  let event = "message";
+  const dataLines: string[] = [];
+
+  for (const line of normalized.split("\n")) {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  if (dataLines.length === 0 && event === "message") return null;
+  return { event, data: dataLines.join("\n") };
+}
+
 export async function* streamSSE(
   url: string,
   body: unknown,
@@ -32,21 +53,28 @@ export async function* streamSSE(
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf("\n\n")) >= 0) {
-      const frame = buf.slice(0, nl);
-      buf = buf.slice(nl + 2);
-      let event = "message";
-      const dataLines: string[] = [];
-      for (const line of frame.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.search(/\r?\n\r?\n/)) >= 0) {
+        const frame = buf.slice(0, nl);
+        const match = buf.slice(nl).match(/^(\r?\n\r?\n)/);
+        const matchLen = match ? match[0].length : 2;
+        buf = buf.slice(nl + matchLen);
+        const ev = parseSseFrame(frame);
+        if (ev) yield ev;
       }
-      if (dataLines.length) yield { event, data: dataLines.join("\n") };
     }
+    // Flush decoder and process any leftover buffered frame (CHAT-10)
+    buf += dec.decode();
+    if (buf.trim()) {
+      const ev = parseSseFrame(buf);
+      if (ev) yield ev;
+    }
+  } finally {
+    reader.releaseLock();
   }
 }

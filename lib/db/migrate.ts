@@ -25,9 +25,23 @@ export function runMigrations(db: Database.Database): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       point TEXT NOT NULL,
       category TEXT DEFAULT 'fact',
+      source_session_id TEXT,
+      source TEXT DEFAULT 'user',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS artifacts (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      message_id TEXT,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id);
+    CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at);
     CREATE TABLE IF NOT EXISTS fsrs_cards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       subject_id INTEGER NOT NULL REFERENCES exam_subjects(id) ON DELETE CASCADE,
@@ -104,6 +118,8 @@ export function runMigrations(db: Database.Database): void {
       dot_id TEXT NOT NULL REFERENCES dots(id) ON DELETE CASCADE,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      tool_calls TEXT,
+      tool_call_id TEXT,
       tool_name TEXT,
       tool_args TEXT,
       tool_result TEXT,
@@ -131,6 +147,8 @@ export function runMigrations(db: Database.Database): void {
       last_run_at INTEGER,
       last_result TEXT,
       error TEXT,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      max_retries INTEGER NOT NULL DEFAULT 3,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -147,6 +165,59 @@ export function runMigrations(db: Database.Database): void {
     INSERT OR IGNORE INTO schema_versions (version, name, applied_at, checksum, execution_time_ms)
     VALUES (1, '0001_baseline_drizzle_and_virtual_tables', strftime('%s','now')*1000, 'baseline', 0);
   `);
+
+  // Ensure columns on chat_sessions exist (idempotent migration)
+  try {
+    const sessionCols = (db.prepare("PRAGMA table_info(chat_sessions)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!sessionCols.includes("mode")) {
+      db.exec("ALTER TABLE chat_sessions ADD COLUMN mode TEXT;");
+    }
+    if (!sessionCols.includes("effort")) {
+      db.exec("ALTER TABLE chat_sessions ADD COLUMN effort TEXT;");
+    }
+  } catch {}
+
+  // Ensure columns on memories exist (idempotent migration)
+  try {
+    const memCols = (db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!memCols.includes("source_session_id")) {
+      db.exec("ALTER TABLE memories ADD COLUMN source_session_id TEXT;");
+    }
+    if (!memCols.includes("source")) {
+      db.exec("ALTER TABLE memories ADD COLUMN source TEXT DEFAULT 'user';");
+    }
+  } catch {}
+
+  // Ensure columns on chat_messages exist (idempotent migration for CHAT-55 & feedback)
+  try {
+    const msgCols = (db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!msgCols.includes("feedback")) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN feedback TEXT;");
+    }
+    if (!msgCols.includes("telemetry")) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN telemetry TEXT;");
+    }
+  } catch {}
+
+  try {
+    const dotMsgCols = (db.prepare("PRAGMA table_info(dot_messages)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!dotMsgCols.includes("tool_calls")) {
+      db.exec("ALTER TABLE dot_messages ADD COLUMN tool_calls TEXT;");
+    }
+    if (!dotMsgCols.includes("tool_call_id")) {
+      db.exec("ALTER TABLE dot_messages ADD COLUMN tool_call_id TEXT;");
+    }
+  } catch {}
+
+  try {
+    const taskCols = (db.prepare("PRAGMA table_info(dot_tasks)").all() as Array<{ name: string }>).map((c) => c.name);
+    if (!taskCols.includes("retry_count")) {
+      db.exec("ALTER TABLE dot_tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!taskCols.includes("max_retries")) {
+      db.exec("ALTER TABLE dot_tasks ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 3;");
+    }
+  } catch {}
 
   // Default seed the 4 specialist Dots if table is empty
   const dotCount = (db.prepare("SELECT COUNT(*) as count FROM dots").get() as { count: number }).count;

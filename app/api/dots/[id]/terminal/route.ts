@@ -4,7 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
 import { getDot, appendDotMessage } from "@/lib/dots-service";
-import { lintShellCommand, lintPath } from "@/lib/agent/safety-linter";
+import { lintShellCommand } from "@/lib/agent/safety-linter";
+import { validateTerminalWorkingDir } from "@/lib/dots/terminal-guard";
+import { scrubSecrets } from "@/lib/dots/secret-scrubber";
 
 const TerminalBodySchema = z.object({
   command: z.string().min(1),
@@ -58,30 +60,18 @@ export async function POST(
     }
 
     // Strictly confine working directory to dot workspace sandbox
-    const baseWorkspace = path.resolve(dot.workingDirectory || process.cwd());
-    let workingDir = baseWorkspace;
-
-    const isSafeSubpath = (parent: string, child: string): boolean => {
-      const rel = path.relative(parent, child);
-      return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-    };
-
-    if (requestedCwd && typeof requestedCwd === "string") {
-      const resolved = path.resolve(baseWorkspace, requestedCwd);
-      if (isSafeSubpath(baseWorkspace, resolved) && fs.existsSync(resolved)) {
-        workingDir = resolved;
-      } else {
-        workingDir = baseWorkspace;
-      }
+    const baseWorkspace = dot.workingDirectory || process.cwd();
+    const dirValidation = validateTerminalWorkingDir(baseWorkspace, requestedCwd);
+    if (!dirValidation.ok || !dirValidation.resolvedPath) {
+      return Response.json({
+        command,
+        stdout: "",
+        stderr: dirValidation.error || "Working directory sandbox violation",
+        exitCode: 126,
+        cwd: baseWorkspace,
+      });
     }
-
-    if (!fs.existsSync(workingDir)) {
-      try {
-        fs.mkdirSync(workingDir, { recursive: true });
-      } catch {
-        workingDir = process.cwd();
-      }
-    }
+    const workingDir = dirValidation.resolvedPath;
 
     // Filter environment to prevent leaking vault secrets or tokens to subprocess
     const env: NodeJS.ProcessEnv = {
@@ -100,21 +90,24 @@ export async function POST(
       exec(command, { cwd: workingDir, env, timeout: 30_000, maxBuffer: 1024 * 512 }, (err: any, stdout: string, stderr: string) => {
         const exitCode = err ? (err.code ?? 1) : 0;
         const resultText = (stdout || stderr || (exitCode === 0 ? "Command succeeded (no output)" : "Command failed")).trim();
+        const cleanStdout = scrubSecrets(stdout);
+        const cleanStderr = scrubSecrets(stderr || (err ? err.message : ""));
+        const cleanResultText = scrubSecrets(resultText);
 
-        // Record terminal takeover action into Dot memory
+        // Record terminal takeover action into Dot memory (scrubbed)
         appendDotMessage(ctx, id, {
           role: "tool",
-          content: `$ ${command}\n${resultText}`,
+          content: `$ ${command}\n${cleanResultText}`,
           toolName: "terminal",
           toolArgs: JSON.stringify({ command, cwd: workingDir }),
-          toolResult: resultText,
+          toolResult: cleanResultText,
         });
 
         resolve(
           Response.json({
             command,
-            stdout,
-            stderr: stderr || (err ? err.message : ""),
+            stdout: cleanStdout,
+            stderr: cleanStderr,
             exitCode,
             cwd: workingDir,
           })

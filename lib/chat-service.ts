@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { encryptBlob, gcmDecrypt } from "@/lib/crypto/envelope";
-import type { UnifiedMessage, UnifiedPart, ToolCall } from "@/lib/ai/types";
+import type { UnifiedMessage, UnifiedPart, ToolCall, TurnTelemetry } from "@/lib/ai/types";
 import { ensureVaultUnlocked, VaultLockedError } from "@/lib/dal/vault-dal";
 
 /**
@@ -37,6 +37,8 @@ export interface ChatSessionMeta {
   title: string | null;
   model: string;
   providerId: number | null;
+  mode?: string | null;
+  effort?: string | null;
   summaryUntil: number;
   summary?: string | null;
   createdAt: number;
@@ -51,6 +53,8 @@ export interface ChatMessageDto {
   toolCalls: ToolCall[] | null;
   toolCallId: string | null;
   editedAt: number | null;
+  feedback?: "helpful" | "unhelpful" | null;
+  telemetry?: TurnTelemetry | null;
   createdAt: number;
 }
 
@@ -61,6 +65,8 @@ interface SessionRow {
   title_tag: Buffer | null;
   provider_id: number | null;
   model: string;
+  mode?: string | null;
+  effort?: string | null;
   summary_enc: Buffer | null;
   summary_nonce: Buffer | null;
   summary_tag: Buffer | null;
@@ -81,6 +87,8 @@ interface MessageRow {
   tool_call_id: string | null;
   edited_at: number | null;
   deleted: number;
+  feedback?: string | null;
+  telemetry?: string | null;
   created_at: number;
 }
 
@@ -136,6 +144,30 @@ function parseToolCalls(raw: string | null): ToolCall[] | null {
   }
 }
 
+function parseTelemetry(raw: string | null | undefined): TurnTelemetry | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as TurnTelemetry;
+  } catch {
+    return null;
+  }
+}
+
+function toMessageDto(ctx: VaultCtx, r: MessageRow): ChatMessageDto {
+  return {
+    id: r.id,
+    seq: r.seq,
+    role: r.role,
+    content: decryptContent(ctx, r),
+    toolCalls: parseToolCalls(r.tool_calls),
+    toolCallId: r.tool_call_id,
+    editedAt: r.edited_at,
+    feedback: (r.feedback as "helpful" | "unhelpful") ?? null,
+    telemetry: parseTelemetry(r.telemetry),
+    createdAt: r.created_at,
+  };
+}
+
 function toMeta(ctx: VaultCtx, r: SessionRow): ChatSessionMeta {
   let summary: string | null = null;
   if (r.summary_enc && r.summary_nonce && r.summary_tag) {
@@ -154,6 +186,8 @@ function toMeta(ctx: VaultCtx, r: SessionRow): ChatSessionMeta {
     title: decryptTitle(ctx, r),
     model: r.model,
     providerId: r.provider_id,
+    mode: r.mode ?? null,
+    effort: r.effort ?? null,
     summaryUntil: r.summary_until,
     summary,
     createdAt: r.created_at,
@@ -171,7 +205,13 @@ function sessionRow(ctx: VaultCtx, id: string): SessionRow | undefined {
 
 export function createSession(
   ctx: VaultCtx,
-  input: { title?: string; model: string; providerId: number | null },
+  input: {
+    title?: string;
+    model: string;
+    providerId: number | null;
+    mode?: string | null;
+    effort?: string | null;
+  },
 ): ChatSessionMeta {
   const id = randomUUID();
   const now = Date.now();
@@ -180,8 +220,8 @@ export function createSession(
     : null;
   ctx.db
     .prepare(
-      `INSERT INTO chat_sessions (id, title_enc, title_nonce, title_tag, provider_id, model, summary_until, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO chat_sessions (id, title_enc, title_nonce, title_tag, provider_id, model, mode, effort, summary_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
     )
     .run(
       id,
@@ -190,6 +230,8 @@ export function createSession(
       titleBlob?.tag ?? null,
       input.providerId,
       input.model,
+      input.mode ?? "chat",
+      input.effort ?? "medium",
       now,
       now,
     );
@@ -227,6 +269,131 @@ export function renameSession(ctx: VaultCtx, id: string, title: string): void {
       "UPDATE chat_sessions SET title_enc = ?, title_nonce = ?, title_tag = ?, updated_at = ? WHERE id = ?",
     )
     .run(t?.enc ?? null, t?.nonce ?? null, t?.tag ?? null, Date.now(), id);
+}
+
+export function updateSession(
+  ctx: VaultCtx,
+  id: string,
+  patch: {
+    model?: string;
+    providerId?: number | null;
+    title?: string;
+    mode?: string | null;
+    effort?: string | null;
+  },
+): ChatSessionMeta {
+  const r = sessionRow(ctx, id);
+  if (!r) throw new Error(`Session not found: ${id}`);
+  const now = Date.now();
+  ctx.db.transaction(() => {
+    if (patch.title !== undefined) {
+      const t = patch.title.trim() ? encryptBlob(ctx.key, patch.title.trim()) : null;
+      ctx.db
+        .prepare(
+          "UPDATE chat_sessions SET title_enc = ?, title_nonce = ?, title_tag = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(t?.enc ?? null, t?.nonce ?? null, t?.tag ?? null, now, id);
+    }
+    if (
+      patch.model !== undefined ||
+      patch.providerId !== undefined ||
+      patch.mode !== undefined ||
+      patch.effort !== undefined
+    ) {
+      const newModel = patch.model ?? r.model;
+      const newProviderId = patch.providerId === undefined ? r.provider_id : patch.providerId;
+      const newMode = patch.mode === undefined ? (r.mode ?? "chat") : patch.mode;
+      const newEffort = patch.effort === undefined ? (r.effort ?? "medium") : patch.effort;
+      ctx.db
+        .prepare(
+          "UPDATE chat_sessions SET model = ?, provider_id = ?, mode = ?, effort = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(newModel, newProviderId, newMode, newEffort, now, id);
+    }
+  })();
+  return toMeta(ctx, sessionRow(ctx, id)!);
+}
+
+export function forkSession(
+  ctx: VaultCtx,
+  sourceSessionId: string,
+  cutoffMessageId: string,
+  customTitle?: string,
+): { session: ChatSessionMeta; messages: ChatMessageDto[] } {
+  const src = sessionRow(ctx, sourceSessionId);
+  if (!src) throw new Error(`Source session not found: ${sourceSessionId}`);
+
+  const cutoffMsg = ctx.db
+    .prepare("SELECT * FROM chat_messages WHERE id = ? AND session_id = ? AND deleted = 0")
+    .get(cutoffMessageId, sourceSessionId) as MessageRow | undefined;
+  if (!cutoffMsg) throw new Error(`Cutoff message not found: ${cutoffMessageId}`);
+
+  const msgsToClone = ctx.db
+    .prepare(
+      "SELECT * FROM chat_messages WHERE session_id = ? AND deleted = 0 AND seq <= ? ORDER BY seq ASC",
+    )
+    .all(sourceSessionId, cutoffMsg.seq) as MessageRow[];
+
+  const newSessionId = randomUUID();
+  const now = Date.now();
+
+  let title: string;
+  if (customTitle && customTitle.trim()) {
+    title = customTitle.trim();
+  } else {
+    const srcTitle = decryptTitle(ctx, src);
+    title = srcTitle ? `Fork of ${srcTitle}` : "Forked Conversation";
+  }
+  const titleBlob = title ? encryptBlob(ctx.key, title) : null;
+
+  ctx.db.transaction(() => {
+    ctx.db
+      .prepare(
+        `INSERT INTO chat_sessions (id, title_enc, title_nonce, title_tag, provider_id, model, mode, effort, summary_until, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      )
+      .run(
+        newSessionId,
+        titleBlob?.enc ?? null,
+        titleBlob?.nonce ?? null,
+        titleBlob?.tag ?? null,
+        src.provider_id,
+        src.model,
+        src.mode ?? "chat",
+        src.effort ?? "medium",
+        now,
+        now,
+      );
+
+    const insertMsg = ctx.db.prepare(
+      `INSERT INTO chat_messages (id, session_id, seq, role, content_enc, content_nonce, content_tag, tool_calls, tool_call_id, edited_at, deleted, feedback, telemetry, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+    );
+
+    for (let i = 0; i < msgsToClone.length; i++) {
+      const m = msgsToClone[i];
+      const newMsgId = randomUUID();
+      insertMsg.run(
+        newMsgId,
+        newSessionId,
+        i,
+        m.role,
+        m.content_enc,
+        m.content_nonce,
+        m.content_tag,
+        m.tool_calls,
+        m.tool_call_id,
+        m.edited_at,
+        m.feedback ?? null,
+        m.telemetry ?? null,
+        m.created_at,
+      );
+    }
+  })();
+
+  const newSession = toMeta(ctx, sessionRow(ctx, newSessionId)!);
+  const clonedMessages = listMessages(ctx, newSessionId);
+  return { session: newSession, messages: clonedMessages };
 }
 
 // ------------------------------------------------------------ messages
@@ -293,16 +460,7 @@ export function appendMessage(
   const row = ctx.db
     .prepare("SELECT * FROM chat_messages WHERE id = ?")
     .get(id) as MessageRow;
-  return {
-    id: row.id,
-    seq: row.seq,
-    role: row.role,
-    content: decryptContent(ctx, row),
-    toolCalls: parseToolCalls(row.tool_calls),
-    toolCallId: row.tool_call_id,
-    editedAt: row.edited_at,
-    createdAt: row.created_at,
-  };
+  return toMessageDto(ctx, row);
 }
 
 export function listMessages(ctx: VaultCtx, sessionId: string): ChatMessageDto[] {
@@ -310,27 +468,51 @@ export function listMessages(ctx: VaultCtx, sessionId: string): ChatMessageDto[]
   const rows = ctx.db
     .prepare("SELECT * FROM chat_messages WHERE session_id = ? AND deleted = 0 ORDER BY seq")
     .all(sessionId) as MessageRow[];
-  return rows.map((r) => ({
-    id: r.id,
-    seq: r.seq,
-    role: r.role,
-    content: decryptContent(ctx, r),
-    toolCalls: parseToolCalls(r.tool_calls),
-    toolCallId: r.tool_call_id,
-    editedAt: r.edited_at,
-    createdAt: r.created_at,
-  }));
+  return rows.map((r) => toMessageDto(ctx, r));
+}
+
+export function setMessageFeedback(
+  ctx: VaultCtx,
+  sessionId: string,
+  messageId: string,
+  feedback: "helpful" | "unhelpful" | null,
+): void {
+  if (!sessionRow(ctx, sessionId)) throw new Error(`Session not found: ${sessionId}`);
+  const row = ctx.db
+    .prepare("SELECT id FROM chat_messages WHERE id = ? AND session_id = ?")
+    .get(messageId, sessionId);
+  if (!row) throw new Error(`Message not found: ${messageId}`);
+  ctx.db
+    .prepare("UPDATE chat_messages SET feedback = ? WHERE id = ? AND session_id = ?")
+    .run(feedback, messageId, sessionId);
+}
+
+export function setMessageTelemetry(
+  ctx: VaultCtx,
+  sessionId: string,
+  messageId: string,
+  telemetry: TurnTelemetry,
+): void {
+  if (!sessionRow(ctx, sessionId)) throw new Error(`Session not found: ${sessionId}`);
+  const row = ctx.db
+    .prepare("SELECT id FROM chat_messages WHERE id = ? AND session_id = ?")
+    .get(messageId, sessionId);
+  if (!row) throw new Error(`Message not found: ${messageId}`);
+  ctx.db
+    .prepare("UPDATE chat_messages SET telemetry = ? WHERE id = ? AND session_id = ?")
+    .run(JSON.stringify(telemetry), messageId, sessionId);
 }
 
 /**
- * Edit a user message: replace content, soft-delete everything after it,
- * and reset the stored summary (context changed under it).
+ * Edit a user message: replace content, optionally soft-delete everything after it,
+ * and reset the stored summary when truncated (context changed under it).
  */
 export function editUserMessage(
   ctx: VaultCtx,
   sessionId: string,
   messageId: string,
   content: string,
+  truncate = true,
 ): void {
   if (!sessionRow(ctx, sessionId)) throw new Error(`Session not found: ${sessionId}`);
   const row = ctx.db
@@ -344,14 +526,16 @@ export function editUserMessage(
         "UPDATE chat_messages SET content_enc = ?, content_nonce = ?, content_tag = ?, edited_at = ? WHERE id = ?",
       )
       .run(blob.enc, blob.nonce, blob.tag, Date.now(), messageId);
-    ctx.db
-      .prepare("UPDATE chat_messages SET deleted = 1 WHERE session_id = ? AND seq > ?")
-      .run(sessionId, row.seq);
-    ctx.db
-      .prepare(
-        "UPDATE chat_sessions SET summary_enc = NULL, summary_nonce = NULL, summary_tag = NULL, summary_until = 0, updated_at = ? WHERE id = ?",
-      )
-      .run(Date.now(), sessionId);
+    if (truncate) {
+      ctx.db
+        .prepare("UPDATE chat_messages SET deleted = 1 WHERE session_id = ? AND seq > ?")
+        .run(sessionId, row.seq);
+      ctx.db
+        .prepare(
+          "UPDATE chat_sessions SET summary_enc = NULL, summary_nonce = NULL, summary_tag = NULL, summary_until = 0, updated_at = ? WHERE id = ?",
+        )
+        .run(Date.now(), sessionId);
+    }
   });
   tx();
 }
@@ -363,6 +547,22 @@ export function editUserMessage(
  */
 export function regenerate(ctx: VaultCtx, sessionId: string): number {
   if (!sessionRow(ctx, sessionId)) throw new Error(`Session not found: ${sessionId}`);
+
+  // Find the last active message in the session
+  const lastActive = ctx.db
+    .prepare(
+      "SELECT seq, role FROM chat_messages WHERE session_id = ? AND deleted = 0 ORDER BY seq DESC LIMIT 1",
+    )
+    .get(sessionId) as { seq: number; role: string } | undefined;
+
+  if (!lastActive) return 0;
+
+  // If the last active message is a user message (e.g. from an edit with truncate or a failed turn),
+  // there is no assistant response to roll back; the existing user turn is preserved for generation.
+  if (lastActive.role === "user") {
+    return lastActive.seq + 1;
+  }
+
   const last = ctx.db
     .prepare(
       "SELECT seq FROM chat_messages WHERE session_id = ? AND deleted = 0 AND role = 'assistant' ORDER BY seq DESC LIMIT 1",

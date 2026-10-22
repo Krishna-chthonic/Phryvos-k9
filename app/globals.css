@@ -16,6 +16,29 @@
 
 @import "katex/dist/katex.min.css";
 
+/* ── KaTeX Mathematics Presentation Polish (CHAT-21) ── */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0.25rem;
+  margin: 0.75rem 0 !important;
+  -webkit-overflow-scrolling: touch;
+}
+.katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+.katex-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+.katex-display::-webkit-scrollbar-thumb {
+  background: var(--border-strong, #3f3f46);
+  border-radius: 4px;
+}
+.katex {
+  font-size: 1.05em;
+  text-rendering: auto;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {

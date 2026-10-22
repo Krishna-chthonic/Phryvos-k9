@@ -42,8 +42,15 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
 
   // Live Filesystem & Activity State
   const [realFiles, setRealFiles] = useState<Array<{ name: string; isDir: boolean; size?: string }>>([]);
+  const [currentSubpath, setCurrentSubpath] = useState("");
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [recentActivities, setRecentActivities] = useState<Array<{ id: string; action: string; time: string; detail: string }>>([]);
+
+  const currentWorkspaceDir = React.useMemo(() => {
+    if (!currentSubpath) return dot.workingDirectory;
+    const cleanSub = currentSubpath.replace(/\.\./g, "").replace(/^\/+/, "");
+    return `${dot.workingDirectory.replace(/\/+$/, "")}/${cleanSub}`;
+  }, [dot.workingDirectory, currentSubpath]);
 
   const loadRealFiles = React.useCallback(async () => {
     setLoadingFiles(true);
@@ -51,7 +58,7 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
       const res = await fetch(`/api/dots/${dot.id}/terminal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: "ls -la", cwd: dot.workingDirectory }),
+        body: JSON.stringify({ command: "ls -la", cwd: currentWorkspaceDir }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -78,7 +85,7 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
     } catch {} finally {
       setLoadingFiles(false);
     }
-  }, [dot.id, dot.workingDirectory]);
+  }, [dot.id, currentWorkspaceDir]);
 
   const loadActivities = React.useCallback(async () => {
     try {
@@ -376,7 +383,24 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
                 <span className="font-semibold text-zinc-200">Workspace Files</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-zinc-500">{dot.workingDirectory}</span>
+                <span className="text-[11px] font-mono text-zinc-500 truncate max-w-[200px] sm:max-w-none" title={currentWorkspaceDir}>
+                  {currentSubpath ? `…/${currentSubpath}` : dot.workingDirectory}
+                </span>
+                {currentSubpath && (
+                  <button
+                    onClick={() => {
+                      setCurrentSubpath((prev) => {
+                        const parts = prev.split("/").filter(Boolean);
+                        parts.pop();
+                        return parts.join("/");
+                      });
+                    }}
+                    className="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition"
+                    title="Go up one folder"
+                  >
+                    .. Up
+                  </button>
+                )}
                 <button
                   onClick={() => void loadRealFiles()}
                   disabled={loadingFiles}
@@ -403,7 +427,9 @@ export function DotComputerPanel({ dot }: DotComputerPanelProps) {
                   <div
                     key={f.name}
                     onClick={() => {
-                      if (!f.isDir) {
+                      if (f.isDir) {
+                        setCurrentSubpath((prev) => (prev ? `${prev}/${f.name}` : f.name));
+                      } else {
                         setTab("Terminal");
                         handleRunCommand(`cat "${f.name}"`);
                       }

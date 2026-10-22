@@ -3,7 +3,8 @@
  * Errors: {error:{code,message}}; locked vaults: 503 {locked:true}.
  */
 import { streamSSE } from "@/lib/sse";
-import type { UnifiedPart } from "@/lib/ai/types";
+import type { UnifiedPart, TurnTelemetry } from "@/lib/ai/types";
+export type { TurnTelemetry };
 
 export interface ProviderMeta {
   id: number;
@@ -20,6 +21,8 @@ export interface ChatSessionMeta {
   title: string | null;
   model: string;
   providerId: number | null;
+  mode?: string | null;
+  effort?: string | null;
   summaryUntil?: number;
   summary?: string | null;
   createdAt: number;
@@ -34,6 +37,8 @@ export interface ChatMessageDto {
   toolCalls: unknown[] | null;
   toolCallId: string | null;
   editedAt: number | null;
+  feedback?: "helpful" | "unhelpful" | null;
+  telemetry?: TurnTelemetry | null;
   createdAt: number;
 }
 
@@ -49,7 +54,13 @@ async function json<T>(res: Response): Promise<T> {
 export const chatApi = {
   listSessions: () =>
     fetch("/api/chat/sessions").then((r) => json<{ sessions: ChatSessionMeta[] }>(r)),
-  createSession: (input: { title?: string; model: string; providerId: number | null }) =>
+  createSession: (input: {
+    title?: string;
+    model: string;
+    providerId: number | null;
+    mode?: string | null;
+    effort?: string | null;
+  }) =>
     fetch("/api/chat/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,7 +72,13 @@ export const chatApi = {
     ),
   patchSession: (
     id: string,
-    patch: { title?: string; model?: string; providerId?: number | null },
+    patch: {
+      title?: string;
+      model?: string;
+      providerId?: number | null;
+      mode?: string | null;
+      effort?: string | null;
+    },
   ) =>
     fetch(`/api/chat/sessions/${id}`, {
       method: "PATCH",
@@ -72,16 +89,37 @@ export const chatApi = {
     fetch(`/api/chat/sessions/${id}`, { method: "DELETE" }).then((r) =>
       json<{ ok: boolean }>(r),
     ),
-  editMessage: (sessionId: string, messageId: string, content: string) =>
+  editMessage: (sessionId: string, messageId: string, content: string, truncate?: boolean) =>
     fetch(`/api/chat/sessions/${sessionId}/messages/${messageId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, truncate }),
     }).then((r) => json<{ messages: ChatMessageDto[] }>(r)),
   compactSession: (sessionId: string) =>
     fetch(`/api/chat/sessions/${sessionId}/compact`, {
       method: "POST",
     }).then((r) => json<{ ok: boolean; summary: string; compactedCount: number }>(r)),
+  forkSession: (
+    sessionId: string,
+    input: { cutoffMessageId: string; title?: string },
+  ) =>
+    fetch(`/api/chat/sessions/${sessionId}/fork`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }).then((r) =>
+      json<{ session: ChatSessionMeta; messages: ChatMessageDto[] }>(r),
+    ),
+  setFeedback: (
+    sessionId: string,
+    messageId: string,
+    feedback: "helpful" | "unhelpful" | null,
+  ) =>
+    fetch(`/api/chat/sessions/${sessionId}/messages/${messageId}/feedback`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback }),
+    }).then((r) => json<{ ok: boolean; feedback: "helpful" | "unhelpful" | null }>(r)),
 
   sendMessage(
     sessionId: string,

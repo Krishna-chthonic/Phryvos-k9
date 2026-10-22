@@ -31,17 +31,21 @@ export interface MemoryItem {
   id: number;
   point: string;
   category: string;
+  sourceSessionId?: string | null;
+  source?: string | null;
   createdAt: number;
   updatedAt: number;
 }
 
 export function listMemories(db: Database.Database): MemoryItem[] {
   const rows = db
-    .prepare("SELECT id, point, category, created_at, updated_at FROM memories ORDER BY created_at DESC")
+    .prepare("SELECT id, point, category, source_session_id, source, created_at, updated_at FROM memories ORDER BY created_at DESC")
     .all() as Array<{
       id: number;
       point: string;
       category: string | null;
+      source_session_id?: string | null;
+      source?: string | null;
       created_at: number;
       updated_at: number;
     }>;
@@ -50,6 +54,8 @@ export function listMemories(db: Database.Database): MemoryItem[] {
     id: r.id,
     point: r.point,
     category: r.category ?? "fact",
+    sourceSessionId: r.source_session_id ?? null,
+    source: r.source ?? "user",
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
@@ -59,12 +65,13 @@ export function addMemory(
   db: Database.Database,
   point: string,
   category = "fact",
-  options?: { source?: "user" | "agent" },
+  options?: { source?: "user" | "agent"; sourceSessionId?: string | null },
 ): MemoryItem {
   const cleanPoint = point.trim();
   if (!cleanPoint) throw new Error("Memory point cannot be empty");
 
   const source = options?.source ?? "user";
+  const sourceSessionId = options?.sourceSessionId ?? null;
   if (source === "agent" && isMemoryTombstoned(db, cleanPoint)) {
     throw new Error(`Cannot save memory: "${cleanPoint}" was previously deleted by the user.`);
   }
@@ -76,14 +83,18 @@ export function addMemory(
 
   const now = Date.now();
   const res = db
-    .prepare("INSERT INTO memories (point, category, created_at, updated_at) VALUES (?, ?, ?, ?)")
-    .run(cleanPoint, category, now, now);
+    .prepare(
+      "INSERT INTO memories (point, category, source_session_id, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(cleanPoint, category, sourceSessionId, source, now, now);
 
   const id = Number(res.lastInsertRowid);
   return {
     id,
     point: cleanPoint,
     category,
+    sourceSessionId,
+    source,
     createdAt: now,
     updatedAt: now,
   };

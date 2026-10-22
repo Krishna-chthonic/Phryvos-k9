@@ -1255,6 +1255,15 @@ async function toolDelegateToDot(
     return `Error: Coworker "${a.targetDot}" not found. Available company coworkers: ${available || "None configured"}`;
   }
 
+  if (a.intervalSeconds !== undefined && a.intervalSeconds !== null) {
+    if (a.intervalSeconds < 60) {
+      return `Error: Minimum task interval is 60 seconds (got ${a.intervalSeconds}s). Sub-minute recurring intervals are rejected to prevent background execution runaway.`;
+    }
+    if (a.intervalSeconds > 31536000) {
+      return `Error: Maximum task interval is 31,536,000 seconds (1 year).`;
+    }
+  }
+
   const task = createDotTask(ctx, matchedDot.id, {
     prompt: a.taskPrompt,
     intervalSeconds: a.intervalSeconds ?? null,
@@ -2851,7 +2860,7 @@ export function ensureAgentTools(): void {
     z.object({
       targetDot: z.string(),
       taskPrompt: z.string(),
-      intervalSeconds: z.number().nullable().optional(),
+      intervalSeconds: z.number().int().min(60).max(31536000).nullable().optional(),
     }),
   );
 

@@ -50,6 +50,16 @@ export interface TurnUsage {
   completionTokens?: number;
 }
 
+export interface TurnTelemetry {
+  latencyMs: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  model: string;
+  provider: string;
+  finishReason: string;
+}
+
 export interface TurnResult {
   text: string;
   toolCalls: ToolCall[];

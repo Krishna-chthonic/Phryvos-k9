@@ -5,6 +5,29 @@ import { Brain, Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toolBadge } from "./ToolStepBadge";
 import type { StepEvt } from "./types";
 
+function getCodeSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+
+  // 1. Fenced code blocks: ```...``` or ~~~...~~~
+  const fenceRegex = /(?:```|~~~)[^\n]*\n[\s\S]*?(?:```|~~~|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRegex.exec(text)) !== null) {
+    spans.push([match.index, match.index + match[0].length]);
+  }
+
+  // 2. Inline code spans: `...` (not inside fenced blocks)
+  const inlineRegex = /`[^`\n]+`/g;
+  while ((match = inlineRegex.exec(text)) !== null) {
+    const start = match.index;
+    const end = match.index + match[0].length;
+    if (!spans.some(([s, e]) => start >= s && end <= e)) {
+      spans.push([start, end]);
+    }
+  }
+
+  return spans;
+}
+
 export function parseThinking(raw: string): {
   thinking: string | null;
   answer: string;
@@ -25,27 +48,48 @@ export function parseThinking(raw: string): {
   let found = true;
   while (found) {
     found = false;
+    const codeSpans = getCodeSpans(currentText);
+    const isInCode = (idx: number, len: number) =>
+      codeSpans.some(([s, e]) => idx >= s && idx + len <= e);
+
     let earliestStart = -1;
     let matchingPattern: { open: string; close: string } | null = null;
 
     for (const pat of tagPatterns) {
-      const idx = currentText.toLowerCase().indexOf(pat.open);
-      if (idx !== -1 && (earliestStart === -1 || idx < earliestStart)) {
-        earliestStart = idx;
-        matchingPattern = pat;
+      let searchPos = 0;
+      while (searchPos < currentText.length) {
+        const idx = currentText.toLowerCase().indexOf(pat.open, searchPos);
+        if (idx === -1) break;
+        if (!isInCode(idx, pat.open.length)) {
+          if (earliestStart === -1 || idx < earliestStart) {
+            earliestStart = idx;
+            matchingPattern = pat;
+          }
+          break;
+        }
+        searchPos = idx + pat.open.length;
       }
     }
 
     if (earliestStart !== -1 && matchingPattern) {
       found = true;
-      const endTagIdx = currentText.toLowerCase().indexOf(
-        matchingPattern.close,
-        earliestStart + matchingPattern.open.length,
-      );
+      const afterOpen = earliestStart + matchingPattern.open.length;
+      let endTagIdx = -1;
+      let searchPos = afterOpen;
+
+      while (searchPos < currentText.length) {
+        const idx = currentText.toLowerCase().indexOf(matchingPattern.close, searchPos);
+        if (idx === -1) break;
+        if (!isInCode(idx, matchingPattern.close.length)) {
+          endTagIdx = idx;
+          break;
+        }
+        searchPos = idx + matchingPattern.close.length;
+      }
 
       if (endTagIdx === -1) {
         // Unclosed thinking tag at the end (currently streaming live thinking)
-        const liveThought = currentText.slice(earliestStart + matchingPattern.open.length);
+        const liveThought = currentText.slice(afterOpen);
         if (liveThought.trim()) {
           allThoughts.push(liveThought.trim());
         }
@@ -54,10 +98,7 @@ export function parseThinking(raw: string): {
         break;
       } else {
         // Closed thinking block
-        const thoughtContent = currentText.slice(
-          earliestStart + matchingPattern.open.length,
-          endTagIdx,
-        );
+        const thoughtContent = currentText.slice(afterOpen, endTagIdx);
         if (thoughtContent.trim()) {
           allThoughts.push(thoughtContent.trim());
         }
@@ -68,11 +109,25 @@ export function parseThinking(raw: string): {
     }
   }
 
-  // Strip any accidental dangling closing tags
-  currentText = currentText.replace(/<\/(?:think|thought|thinking)>/gi, "").trim();
+  // Strip dangling closing tags only outside code spans
+  const finalCodeSpans = getCodeSpans(currentText);
+  const isInFinalCode = (idx: number, len: number) =>
+    finalCodeSpans.some(([s, e]) => idx >= s && idx + len <= e);
+
+  const closeTagRegex = /<\/(?:think|thought|thinking)>/gi;
+  let cleanText = "";
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = closeTagRegex.exec(currentText)) !== null) {
+    if (!isInFinalCode(match.index, match[0].length)) {
+      cleanText += currentText.slice(lastIndex, match.index);
+      lastIndex = match.index + match[0].length;
+    }
+  }
+  cleanText += currentText.slice(lastIndex);
 
   const thinking = allThoughts.length > 0 ? allThoughts.join("\n\n---\n\n") : null;
-  const answer = currentText.trim();
+  const answer = cleanText.trim();
 
   return { thinking, answer, isThinkingLive };
 }

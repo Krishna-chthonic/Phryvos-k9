@@ -34,6 +34,37 @@ export function DotCallModal({
 
   const recognitionRef = useRef<any>(null);
   const lastSpokenMsgRef = useRef<string>("");
+  const isOpenRef = useRef<boolean>(open);
+  const isMutedRef = useRef<boolean>(muted);
+
+  useEffect(() => {
+    isOpenRef.current = open;
+    if (!open) {
+      lastSpokenMsgRef.current = "";
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+  }, [open]);
+
+  useEffect(() => {
+    isMutedRef.current = muted;
+  }, [muted]);
+
+  // Comprehensive audio/mic stream cleanup on unmount (D-25)
+  useEffect(() => {
+    return () => {
+      isOpenRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Call timer
   useEffect(() => {
@@ -139,8 +170,8 @@ export function DotCallModal({
       };
 
       recognition.onend = () => {
-        // Auto-restart recognition if call is still active and not muted
-        if (open && !muted) {
+        // Auto-restart recognition only if call is still active and not muted (D-25)
+        if (isOpenRef.current && !isMutedRef.current) {
           try {
             recognition.start();
           } catch {}

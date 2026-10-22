@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { vaultRoute } from "@/server/vault-guard";
 import { OpenBrowserEngine } from "@/lib/browser/openbrowser-engine";
+import { getDot } from "@/lib/dots-service";
+import { verifyDotBrowserPermission } from "@/lib/browser/browser-guard";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get("session") || "default";
 
-  return vaultRoute(() => {
+  return vaultRoute(async (ctx) => {
+    // If session corresponds to a Dot, enforce tool permission boundary
+    const dot = getDot(ctx, sessionId);
+    if (dot && !verifyDotBrowserPermission(dot.tools)) {
+      return NextResponse.json(
+        { error: { code: "tool_disabled", message: `Browser tool is not enabled for ${dot.name}` } },
+        { status: 403 }
+      );
+    }
+
     const session = OpenBrowserEngine.getOrCreateSession(sessionId);
     return NextResponse.json({
       session: {
@@ -31,7 +42,16 @@ export async function POST(req: NextRequest) {
 
   const sessionId = json.sessionId || "default";
 
-  return vaultRoute(async () => {
+  return vaultRoute(async (ctx) => {
+    // If session corresponds to a Dot, enforce tool permission boundary
+    const dot = getDot(ctx, sessionId);
+    if (dot && !verifyDotBrowserPermission(dot.tools)) {
+      return NextResponse.json(
+        { error: { code: "tool_disabled", message: `Browser tool is not enabled for ${dot.name}` } },
+        { status: 403 }
+      );
+    }
+
     try {
       let session: any;
 

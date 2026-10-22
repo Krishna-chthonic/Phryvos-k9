@@ -1,9 +1,18 @@
 import { z } from "zod";
 import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
-import { getDot, updateDot, listDotMessages, appendDotMessage } from "@/lib/dots-service";
+import {
+  getDot,
+  updateDot,
+  listDotMessages,
+  appendDotMessage,
+  listDotSpaces,
+  formatSpacesContext,
+} from "@/lib/dots-service";
 import { createLlmClient, defaultProvider, listProviders } from "@/lib/providers-service";
 import { runAgentTurn } from "@/lib/agent/loop";
 import { ensureAgentTools } from "@/lib/agent/tools";
+import { resolveAllowedTools } from "@/lib/dots-runner";
+import { scrubSecrets } from "@/lib/dots/secret-scrubber";
 import { enhancePromptWithEcc } from "@/lib/ai/prompts/ecc-instincts";
 import type { UnifiedMessage } from "@/lib/ai/types";
 
@@ -37,17 +46,50 @@ export async function POST(
     // Mark Dot as working
     updateDot(ctx, id, { status: "working" });
 
-    // Prepare previous messages for context
+    // Prepare spaces context (D-17)
+    const spaces = listDotSpaces(ctx, id);
+    const spacesContext = formatSpacesContext(spaces);
+
+    // Prepare previous messages for context with canonical tool calls (D-14)
     const history = listDotMessages(ctx, id);
     const messages: UnifiedMessage[] = [
       {
         role: "system",
-        content: `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as the specialist AI coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}. Provide clear, thoughtful, high-quality responses and use tools actively to execute work.`,
+        content: `${enhancePromptWithEcc(dot.systemPrompt, dot.role)}\n\nYou are operating as the specialist AI coworker "${dot.name}" (${dot.role}).\nYour working environment is "${dot.workingDirectory}".\nEnabled tools: ${dot.tools.join(", ")}. Provide clear, thoughtful, high-quality responses and use tools actively to execute work.${spacesContext}`,
       },
-      ...history.slice(-15).map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      ...history.slice(-20).map((m): UnifiedMessage => {
+        if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: "assistant",
+            content: m.content,
+            toolCalls: m.toolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.function?.name || tc.name || "unknown",
+              args: tc.function?.arguments
+                ? (() => {
+                    try {
+                      return JSON.parse(tc.function.arguments);
+                    } catch {
+                      return {};
+                    }
+                  })()
+                : tc.args || {},
+            })),
+          };
+        }
+        if (m.role === "tool" && m.toolCallId) {
+          return {
+            role: "tool",
+            content: m.content,
+            toolCallId: m.toolCallId,
+            name: m.toolName || undefined,
+          };
+        }
+        return {
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+        };
+      }),
     ];
 
     // Determine LLM provider & client
@@ -78,14 +120,21 @@ export async function POST(
       writer.write(enc.encode(`event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`));
     };
 
+    // Periodic keepalive ping every 15s to prevent gateway timeouts (D-15)
+    const pingTimer = setInterval(() => {
+      try {
+        writer.write(enc.encode(`: ping\n\n`));
+      } catch {
+        clearInterval(pingTimer);
+      }
+    }, 15000);
+
     (async () => {
       let full = "";
       try {
         ensureAgentTools();
 
-        const allowedTools = (dot.tools.includes("*") || dot.tools.includes("all") || dot.tools.includes("omni"))
-          ? undefined
-          : dot.tools;
+        const allowedTools = resolveAllowedTools(dot.tools);
 
         const result = await runAgentTurn({
           db: ctx.db,
@@ -107,16 +156,25 @@ export async function POST(
           onApprovalRequest: (approval) => {
             send("approval", approval);
           },
-          appendAssistant: (text) => {
+          appendAssistant: (text, toolCalls) => {
             appendDotMessage(ctx, id, {
               role: "assistant",
               content: text,
+              toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls.map((tc) => ({
+                id: tc.id,
+                type: "function" as const,
+                function: {
+                  name: tc.name,
+                  arguments: JSON.stringify(tc.args || {}),
+                },
+              })) : null,
             });
           },
-          appendTool: (_id, name, content) => {
+          appendTool: (toolCallId, name, content) => {
             appendDotMessage(ctx, id, {
               role: "tool",
               content,
+              toolCallId,
               toolName: name,
             });
           },
@@ -133,10 +191,12 @@ export async function POST(
             content: full,
           });
         }
+        const rawMsg = err instanceof Error ? err.message : "Failed to execute dot turn";
         send("error", {
-          message: err instanceof Error ? err.message : "Failed to execute dot turn",
+          message: scrubSecrets(rawMsg),
         });
       } finally {
+        clearInterval(pingTimer);
         writer.close();
       }
     })();

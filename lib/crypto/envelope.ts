@@ -40,33 +40,51 @@ export interface FileEnvelope {
   dekTag: Buffer;
 }
 
-/** Mint a new per-file DEK and wrap it under the vault master key. */
-export function newFileEnvelope(masterKey: Buffer): FileEnvelope {
+/** Mint a new per-file DEK and wrap it under the vault master key, optionally bound to AAD. */
+export function newFileEnvelope(masterKey: Buffer, aad?: Buffer | string): FileEnvelope {
   const dek = randomBytes(32);
-  const wrapped = gcmEncrypt(masterKey, dek);
+  const wrapped = gcmEncrypt(masterKey, dek, aad);
   return { dek, dekEnc: wrapped.enc, dekNonce: wrapped.nonce, dekTag: wrapped.tag };
 }
 
-/** Open (unwrap) a per-file DEK under the master key. */
+/** Open (unwrap) a per-file DEK under the master key, verifying AAD binding if provided. */
 export function openFileEnvelope(
   masterKey: Buffer,
   wrapped: Pick<FileEnvelope, "dekEnc" | "dekNonce" | "dekTag">,
+  aad?: Buffer | string,
 ): Buffer {
-  return gcmDecrypt(masterKey, {
-    enc: wrapped.dekEnc,
-    nonce: wrapped.dekNonce,
-    tag: wrapped.dekTag,
-  });
+  try {
+    return gcmDecrypt(
+      masterKey,
+      {
+        enc: wrapped.dekEnc,
+        nonce: wrapped.dekNonce,
+        tag: wrapped.dekTag,
+      },
+      aad,
+    );
+  } catch (err) {
+    if (aad) {
+      // Backward compatibility: allow legacy envelopes created without AAD to decrypt
+      return gcmDecrypt(masterKey, {
+        enc: wrapped.dekEnc,
+        nonce: wrapped.dekNonce,
+        tag: wrapped.dekTag,
+      });
+    }
+    throw err;
+  }
 }
 
-/** Encrypt a string/Buffer directly under the master key (chat, keys, titles). */
-export function encryptBlob(masterKey: Buffer, plain: Buffer | string): GcmBlob {
+/** Encrypt a string/Buffer directly under the master key (chat, keys, titles) with optional AAD. */
+export function encryptBlob(masterKey: Buffer, plain: Buffer | string, aad?: Buffer | string): GcmBlob {
   return gcmEncrypt(
     masterKey,
     typeof plain === "string" ? Buffer.from(plain, "utf8") : plain,
+    aad,
   );
 }
 
-export function decryptBlob(masterKey: Buffer, blob: GcmBlob): string {
-  return gcmDecrypt(masterKey, blob).toString("utf8");
+export function decryptBlob(masterKey: Buffer, blob: GcmBlob, aad?: Buffer | string): string {
+  return gcmDecrypt(masterKey, blob, aad).toString("utf8");
 }

@@ -235,7 +235,8 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
   if (verifyDuressPin(pin)) {
     await initDecoyVault();
     const decoyKey = randomBytes(32);
-    const decoyToken = createSession(decoyKey, 5 * 60 * 1000, "decoy");
+    const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
+    const decoyToken = createSession(decoyKey, autoLockMinutes * 60 * 1000, "decoy");
     const g = globalThis as unknown as { __phryvosSessions?: Map<string, VaultSession> };
     const session = g.__phryvosSessions?.get(decoyToken);
 
@@ -244,10 +245,10 @@ export async function authenticateVault(pin: string): Promise<AuthResult> {
       httpOnly: true,
       secure: true,
       sameSite: "strict",
-      maxAge: 5 * 60,
+      maxAge: autoLockMinutes * 60,
       path: "/",
     });
-    return { success: true, session: session!, vaultType: "decoy", error: "Duress mode: Decoy vault active" };
+    return { success: true, session: session!, vaultType: "real" };
   }
 
   // Check master password / PIN

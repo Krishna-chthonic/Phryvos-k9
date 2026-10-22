@@ -281,11 +281,15 @@ export function readFile(ctx: VaultCtx, path: string): { bytes: Buffer; mime: st
   if (!r.content_enc || !r.dek) {
     return { bytes: Buffer.alloc(0), mime: r.mime }; // empty file
   }
-  const dek = openFileEnvelope(ctx.key, {
-    dekEnc: r.dek,
-    dekNonce: r.dek_nonce!,
-    dekTag: r.dek_tag!,
-  });
+  const dek = openFileEnvelope(
+    ctx.key,
+    {
+      dekEnc: r.dek,
+      dekNonce: r.dek_nonce!,
+      dekTag: r.dek_tag!,
+    },
+    `file:${r.id}`,
+  );
   const bytes = gcmDecrypt(dek, {
     enc: r.content_enc,
     nonce: r.nonce!,
@@ -372,7 +376,7 @@ export function writeFile(
         );
     }
 
-    const env = newFileEnvelope(ctx.key);
+    const env = newFileEnvelope(ctx.key, `file:${r.id}`);
     const blob = gcmEncrypt(env.dek, bytes);
     ctx.db
       .prepare(

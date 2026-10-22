@@ -299,10 +299,17 @@ MANDATORY NEXT STEPS:
       }
 
       if (!blocked && isDestructive(tc.name)) {
-        if (deps.autoApproveTools) {
+        // High-impact actions (deletion, permanent purge, arbitrary code execution) NEVER bypass human gate
+        const isCriticalDestructive =
+          tc.name === "delete_file" ||
+          tc.name === "purge_file" ||
+          tc.name === "run_js_code" ||
+          tc.name === "execute_terminal";
+
+        if (deps.autoApproveTools && !isCriticalDestructive) {
           approval = {
             decision: "allowed",
-            detail: "Auto-approved in autonomous Research Mode.",
+            detail: "Auto-approved non-critical tool in autonomous mode.",
           };
           blocked = false;
         } else {

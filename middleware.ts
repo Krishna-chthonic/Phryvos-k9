@@ -14,7 +14,7 @@ const CSP_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' ws: https: http://localhost:* http://127.0.0.1:*",
+  "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://api.openai.com https://api.anthropic.com https://text.pollinations.ai https://image.pollinations.ai",
   "frame-src 'self'",
   "worker-src 'self' blob:",
   "media-src 'none'",
@@ -33,14 +33,11 @@ const PERMISSIONS = "camera=(), microphone=(), geolocation=()";
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Skip CSP for static assets, next internals, and SSE unlock endpoint
+  // Skip middleware only for static assets and Next.js internal chunks
   if (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/public/") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/api/auth/unlock" ||
-    pathname.startsWith("/api/auth/change-password") ||
-    pathname.startsWith("/api/chat/")
+    pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
   }

@@ -2567,12 +2567,12 @@ export function ensureAgentTools(): void {
 
   reg(
     "run_js_code",
-    "Safely execute a JavaScript code snippet in a sandboxed environment for algorithms, statistical analysis, data processing, string manipulation, or complex logic. Has standard Math, Date, JSON, Array builtins and console.log.",
+    "Execute a JavaScript code snippet in a sandboxed environment for algorithms, statistical analysis, data processing, string manipulation, or complex logic. Always requires human approval.",
     P("run_js_code", "Run sandboxed JavaScript", {
       code: { type: "string", description: "JavaScript code snippet to execute" },
     }),
     toolRunJsCode,
-    false,
+    true, // Destructive / Security boundary: Requires explicit human approval
     z.object({ code: z.string().min(1) }),
   );
 

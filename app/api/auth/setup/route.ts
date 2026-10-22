@@ -7,6 +7,7 @@
  * User instruction verbatim: "Duress Ghost Vault & isolated decoy database (vault_decoy.db)"
  */
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db/client";
 import { kvSet } from "@/lib/db/kv";
@@ -68,9 +69,10 @@ export async function POST(req: Request) {
     const ttlMs = 30 * 60_000;
     const token = createSession(masterKey, ttlMs);
     const now = Date.now();
+    const tokenHash = createHash("sha256").update(token).digest("hex");
     db.prepare(
       "INSERT INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)",
-    ).run(token, now, now + ttlMs);
+    ).run(tokenHash, now, now + ttlMs);
 
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(ttlMs));

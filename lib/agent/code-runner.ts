@@ -42,6 +42,8 @@ export function runSandboxedJs(
     /\bReflect\b/,
     /\bProxy\b/,
     /\bWebAssembly\b/,
+    /\bgetPrototypeOf\b/,
+    /\bsetPrototypeOf\b/,
   ];
 
   for (const pattern of blockedPatterns) {
@@ -95,9 +97,17 @@ export function runSandboxedJs(
   try {
     const context = vm.createContext(sandbox);
 
-    // Wrap in an IIFE so statements, returns, or expressions work cleanly
+    // Wrap in an isolated closure with defensive prototype guards
     const wrapped = `
       (() => {
+        "use strict";
+        try {
+          Object.defineProperty(Object.prototype, '__proto__', {
+            get() { throw new Error('Security Exception: __proto__ access is prohibited'); },
+            set() { throw new Error('Security Exception: __proto__ mutation is prohibited'); },
+            configurable: false,
+          });
+        } catch (_) {}
         ${code}
       })()
     `;

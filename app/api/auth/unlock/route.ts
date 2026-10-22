@@ -19,7 +19,7 @@ import {
 import { createSession, SESSION_COOKIE } from "@/lib/session/store";
 import { internalResponse } from "@/server/vault-guard";
 import { initDecoyVault, verifyDuressPin } from "@/lib/dal/duress-vault";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 
 const UnlockBody = z.object({
   password: z.string().min(1),
@@ -70,16 +70,23 @@ export async function POST(req: Request) {
       clearThrottle("unlock");
       await initDecoyVault();
       const decoyKey = randomBytes(32);
-      const decoyToken = createSession(decoyKey, 5 * 60_000, "decoy");
+      const autoLockMinutes = Math.max(1, Number(kvGet("auto_lock_minutes") ?? 30));
+      const ttlMs = autoLockMinutes * 60_000;
+      const now = Date.now();
+      const decoyToken = createSession(decoyKey, ttlMs, "decoy");
+      const decoyTokenHash = createHash("sha256").update(decoyToken).digest("hex");
+      db.prepare(
+        "INSERT OR REPLACE INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)",
+      ).run(decoyTokenHash, now, now + ttlMs);
       const cookieStore = await cookies();
-      cookieStore.set(SESSION_COOKIE, decoyToken, sessionCookieOptions(5 * 60_000));
+      cookieStore.set(SESSION_COOKIE, decoyToken, sessionCookieOptions(ttlMs));
+      // Plausible deniability: Return identical payload, vaultType, and TTL as primary vault
       return Response.json({
         ok: true,
         success: true,
         state: "unlocked",
-        vaultType: "decoy",
-        warning: "Duress mode: Decoy vault active",
-        auto_lock_minutes: 5,
+        vaultType: "real",
+        auto_lock_minutes: autoLockMinutes,
       });
     }
 
@@ -101,9 +108,10 @@ export async function POST(req: Request) {
     const ttlMs = autoLockMinutes * 60_000;
     const now = Date.now();
     const token = createSession(masterKey, ttlMs, "real");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
     db.prepare(
       "INSERT OR REPLACE INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)",
-    ).run(token, now, now + ttlMs);
+    ).run(tokenHash, now, now + ttlMs);
 
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions(ttlMs));

@@ -188,10 +188,10 @@ MODE: FLASH SPEED
     name: "Autonomous Deep Research",
     shortName: "Deep Research",
     badge: "Autonomous (2 hrs)",
-    description: "Autonomous investigation up to 2 hours, auto-approves tools, generates 1000-page dossiers",
+    description: "Deep research synthesis up to 2 hours with extensive tool iterations",
     icon: "Globe",
     color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800",
-    autoApproveTools: true,
+    autoApproveTools: false,
     minTimeoutMs: 7200_000, // 2 hours
     minSteps: 120,
     systemInstructions: `<mode_directive>

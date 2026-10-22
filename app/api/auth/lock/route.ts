@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { createHash } from "node:crypto";
 import { getDb } from "@/lib/db/client";
 import { sessionCookieClearOptions } from "@/lib/session/cookie";
 import { destroySession, SESSION_COOKIE } from "@/lib/session/store";
@@ -11,7 +12,8 @@ export async function POST() {
     const token = cookieStore.get(SESSION_COOKIE)?.value;
     destroySession(token);
     if (token) {
-      getDb().prepare("DELETE FROM sessions WHERE token = ?").run(token);
+      const hash = createHash("sha256").update(token).digest("hex");
+      getDb().prepare("DELETE FROM sessions WHERE token = ? OR token = ?").run(token, hash);
     }
     cookieStore.delete(SESSION_COOKIE);
     return Response.json({ ok: true, state: "locked" });

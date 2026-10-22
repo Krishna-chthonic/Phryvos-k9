@@ -12,7 +12,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "env PATH=/usr/bin:/bin:$PATH tsx --test tests/*.test.ts",
+    "test": "node ./node_modules/.bin/tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate --config ./drizzle.config.ts",
     "monaco:copy": "node -e \"require('node:fs').cpSync('node_modules/monaco-editor/min/vs','public/monaco/vs',{recursive:true})\""

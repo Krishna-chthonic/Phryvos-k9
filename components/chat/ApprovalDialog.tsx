@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { ShieldCheck, AlertTriangle, ShieldAlert, CheckCircle2, FileCode } from "lucide-react";
 import type { ApprovalReq } from "./types";
 import { Button } from "@/components/ui/button";
-import { getToolRiskLevel, checkPathContainment, ToolRiskLevel } from "@/lib/agent/guardrails";
+import { getToolRiskLevel, checkPathContainment, ToolRiskLevel } from "@/lib/agent/risk";
 
 export function ApprovalDialog({
   approval,

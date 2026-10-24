@@ -172,23 +172,6 @@ export function revokeTelegramUser(db: Database.Database, telegramId: string): v
   db.prepare("DELETE FROM telegram_users WHERE telegram_id = ?").run(telegramId.trim());
 }
 
-// ---------------------------------------------------------------- Telegram API Calls
-
-async function callTelegramApi(token: string, method: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
-  const url = `https://api.telegram.org/bot${token}/${method}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  const data = await res.json();
-  if (!data.ok) {
-    throw new Error(`Telegram API ${method} failed: ${data.description || "unknown"}`);
-  }
-  return data.result;
-}
-
 // ---------------------------------------------------------------- Gateway Polling Daemon
 
 type GlobalGateway = { __phryvosTelegramGateway?: TelegramGatewayService };
@@ -213,6 +196,21 @@ export class TelegramGatewayService {
 
   public getLastPollTime(): number {
     return this.lastPollTime;
+  }
+
+  private async callTelegramApi(token: string, method: string, payload: Record<string, unknown>, signal?: AbortSignal): Promise<any> {
+    const url = `https://api.telegram.org/bot${token}/${method}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      throw new Error(`Telegram API ${method} failed: ${data.description || "unknown"}`);
+    }
+    return data.result;
   }
 
   public async start(db: Database.Database, botToken: string): Promise<void> {
@@ -248,7 +246,7 @@ export class TelegramGatewayService {
 
     for (const u of approved) {
       try {
-        await callTelegramApi(config.botToken, "sendMessage", {
+        await this.callTelegramApi(config.botToken, "sendMessage", {
           chat_id: u.telegramId,
           text,
           parse_mode: "Markdown",
@@ -263,6 +261,7 @@ export class TelegramGatewayService {
 
   /**
    * Direct push message to specific telegramId with optional action buttons
+   * @deprecated Use safeSendTelegramMessage for chunking and fallback support
    */
   public async sendPush(
     token: string,
@@ -283,12 +282,82 @@ export class TelegramGatewayService {
         };
       }
 
-      await callTelegramApi(token, "sendMessage", payload);
+      await this.callTelegramApi(token, "sendMessage", payload);
       return true;
     } catch (err) {
       console.error(`[TelegramGateway] Failed to send push to ${telegramId}:`, err);
       return false;
     }
+  }
+
+  /**
+   * Safely send a Telegram message with automatic chunking (4000 char limit)
+   * and Markdown parse failure fallback to plain text.
+   *
+   * Telegram's sendMessage has a 4096 char limit but Markdown entities consume extra space.
+   * We use 4000 as a safe boundary. On Markdown parse errors, we retry without parse_mode.
+   *
+   * Buttons are only included in the first chunk.
+   */
+  public async safeSendTelegramMessage(
+    db: Database.Database,
+    token: string,
+    telegramId: string,
+    text: string,
+    buttons?: Array<{ text: string; data: string }>,
+  ): Promise<number> {
+    const CHUNK_SIZE = 4000;
+    let sent = 0;
+    let isFirstChunk = true;
+
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+      const chunk = text.slice(i, i + CHUNK_SIZE);
+      let success = false;
+
+      // Try with Markdown first
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const useMarkdown = attempt === 0;
+        try {
+          const payload: Record<string, unknown> = {
+            chat_id: telegramId,
+            text: chunk,
+          };
+
+          if (useMarkdown) {
+            payload.parse_mode = "Markdown";
+          }
+
+          if (isFirstChunk && buttons && buttons.length > 0) {
+            payload.reply_markup = {
+              inline_keyboard: [buttons.map((b) => ({ text: b.text, callback_data: b.data }))],
+            };
+          }
+
+          await this.callTelegramApi(token, "sendMessage", payload);
+          sent++;
+          success = true;
+          break;
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          const isParseError = errorMsg.includes("can't parse entities") || errorMsg.includes("Bad Request");
+          if (!useMarkdown || !isParseError) {
+            // If plain text also fails, or it's not a parse error, don't retry
+            console.error(`[TelegramGateway] Failed to send chunk ${sent + 1}:`, err);
+            break;
+          }
+          // Markdown parse error - will retry without parse_mode
+        }
+      }
+
+      if (!success) {
+        // Even if one chunk fails, continue with remaining chunks
+        console.error(`[TelegramGateway] Giving up on chunk ${sent + 1} after retries`);
+      }
+
+      isFirstChunk = false;
+    }
+
+    return sent;
   }
 
   private async pollLoop(db: Database.Database, botToken: string, signal: AbortSignal): Promise<void> {
@@ -297,7 +366,7 @@ export class TelegramGatewayService {
     while (this.polling && !signal.aborted) {
       try {
         this.lastPollTime = Date.now();
-        const updates = await callTelegramApi(
+        const updates = await this.callTelegramApi(
           botToken,
           "getUpdates",
           {
@@ -361,7 +430,7 @@ export class TelegramGatewayService {
         `).run(senderId, username, firstName, code, now);
       }
 
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: senderId,
         text: `🔒 *Phryvos-K9 Vault Access Required*\n\nYour Telegram ID: \`${senderId}\`\nPairing Code: \`${code}\`\n\nPlease approve this pairing code in your Phryvos-K9 Web UI under *Settings → Telegram Gateway* to link this device.`,
         parse_mode: "Markdown",
@@ -370,7 +439,7 @@ export class TelegramGatewayService {
     }
 
     if (config.dmPolicy === "allowlist" && (!user || user.status !== "approved")) {
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: senderId,
         text: `⛔ *Access Denied*\nYour Telegram ID (\`${senderId}\`) is not on the Phryvos-K9 whitelist.`,
         parse_mode: "Markdown",
@@ -385,7 +454,7 @@ export class TelegramGatewayService {
   private async dispatchMessage(db: Database.Database, botToken: string, chatId: string, rawText: string): Promise<void> {
     const key = getActiveMasterKey();
     if (!key) {
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: "🔐 *Vault is Locked*\nPlease unlock your Phryvos-K9 vault from your browser before executing commands.",
         parse_mode: "Markdown",
@@ -414,7 +483,7 @@ export class TelegramGatewayService {
         `• \`/memorize <fact>\` — Save permanent memory to vault\n\n` +
         `*Specialist Coworkers:*\n${dotList || "• (No dots configured)"}\n\n` +
         `_Tip: Direct messages default to your personal Chat companion._`;
-      await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: helpMsg, parse_mode: "Markdown" });
+      await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: helpMsg, parse_mode: "Markdown" });
       return;
     }
 
@@ -429,7 +498,7 @@ export class TelegramGatewayService {
         `• *Queued/Running Tasks:* ${activeTasks.length}\n` +
         `• *Node.js Runtime:* ${process.version} (Linux ARM64)\n` +
         `• *Memory RSS:* ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`;
-      await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: statusMsg, parse_mode: "Markdown" });
+      await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: statusMsg, parse_mode: "Markdown" });
       return;
     }
 
@@ -437,14 +506,14 @@ export class TelegramGatewayService {
     if (rawText === "/tasks") {
       const tasks = listDotTasks(ctx, "");
       if (!tasks.length) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "No standing tasks found." });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "No standing tasks found." });
         return;
       }
       const lines = tasks.slice(0, 10).map((t) => {
         const icon = t.status === "completed" ? "✔" : t.status === "running" ? "⏳" : t.status === "paused" ? "⏸" : "🕒";
         return `${icon} *${t.status.toUpperCase()}* #${t.id.replace("task_", "")}\n_${t.prompt}_\n`;
       });
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `📋 *Company Task Board (Top 10)*\n\n${lines.join("\n")}`,
         parse_mode: "Markdown",
@@ -456,11 +525,11 @@ export class TelegramGatewayService {
     if (rawText === "/worktrees") {
       const trees = await listWorktrees();
       if (!trees.length) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "No active Git worktrees." });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "No active Git worktrees." });
         return;
       }
       const lines = trees.map((t) => `🌲 *${t.branch}* (\`${t.head.substring(0, 7)}\`)\nPath: \`${t.path}\``);
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🌲 *Active Git Worktrees (${trees.length})*\n\n${lines.join("\n\n")}`,
         parse_mode: "Markdown",
@@ -472,7 +541,7 @@ export class TelegramGatewayService {
     if (rawText.startsWith("/memorize ") || rawText.startsWith("/reme ")) {
       const fact = rawText.replace(/^\/(memorize|reme)\s+/, "").trim();
       if (!fact) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Please provide a fact to remember." });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Please provide a fact to remember." });
         return;
       }
       addMemory(db, fact);
@@ -485,7 +554,7 @@ export class TelegramGatewayService {
         source: `telegram:${chatId}`,
       });
 
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🧠 *Memory Saved (ReMe 3-Layer Format):*\n\n"${fact}"\n\n_Encrypted File: ${remeDoc.vaultPath}_`,
         parse_mode: "Markdown",
@@ -499,7 +568,7 @@ export class TelegramGatewayService {
       const filesMsg = dreamRes.newFiles.length
         ? `\n\n*Synthesized Knowledge Docs:*\n${dreamRes.newFiles.map((f) => `• \`${f}\``).join("\n")}`
         : "";
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🌙 *ReMe Dream Cycle Completed*\n\n• Consolidated Facts: ${dreamRes.consolidated}\n• New Vault Docs: ${dreamRes.newFiles.length}${filesMsg}`,
         parse_mode: "Markdown",
@@ -511,7 +580,7 @@ export class TelegramGatewayService {
     if (rawText === "/recipes") {
       const allRecipes = listRecipes(ctx);
       const lines = allRecipes.map((r) => `• \`/recipe ${r.id}\` — *${r.name}* (${r.steps.length} steps)\n  _${r.description}_`);
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `📜 *Available Goose Automation Recipes (${allRecipes.length})*\n\n${lines.join("\n\n")}\n\n_Execute with: /recipe <id> [param=value]_`,
         parse_mode: "Markdown",
@@ -524,11 +593,11 @@ export class TelegramGatewayService {
       const parts = rawText.substring(8).trim().split(/\s+/);
       const recipeId = parts[0]?.toLowerCase();
       if (!recipeId) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /recipe <recipeId>" });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /recipe <recipeId>" });
         return;
       }
 
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `⏳ *Launching Goose Recipe:* \`${recipeId}\`\nRunning multi-step autonomous execution in background...`,
         parse_mode: "Markdown",
@@ -543,14 +612,14 @@ export class TelegramGatewayService {
 
       try {
         const result = await executeRecipe(ctx, recipeId, params);
-        await callTelegramApi(botToken, "sendMessage", {
+        await this.callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: formatMarkdownTablesForMobile(
             `✔ *Goose Recipe Completed: ${result.recipeName}*\n⏱ Elapsed: ${(result.totalDurationMs / 1000).toFixed(1)}s\n\n${result.finalReport.slice(0, 3000)}`,
           ),
         });
       } catch (recipeErr) {
-        await callTelegramApi(botToken, "sendMessage", {
+        await this.callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: `❌ Recipe failed: ${recipeErr instanceof Error ? recipeErr.message : String(recipeErr)}`,
         });
@@ -565,7 +634,7 @@ export class TelegramGatewayService {
         const icon = c.status === "healthy" ? "✔" : c.status === "degraded" ? "⚠️" : "❌";
         return `${icon} *${c.name}* (\`${c.latencyMs}ms\`)\n  ${c.detail || c.status}`;
       });
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🩺 *Agent-Reach Doctor Diagnostics*\n\n${lines.join("\n\n")}`,
         parse_mode: "Markdown",
@@ -577,11 +646,11 @@ export class TelegramGatewayService {
     if (rawText.startsWith("/reach ")) {
       const targetUrl = rawText.substring(7).trim();
       if (!targetUrl) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /reach <url>" });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /reach <url>" });
         return;
       }
 
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🌐 *Reaching public web data...*\nAnalyzing source link across Agent-Reach channels...`,
         parse_mode: "Markdown",
@@ -606,12 +675,12 @@ export class TelegramGatewayService {
           content = `📄 *${web.title}*\nSource: ${web.url} (${web.source})\n\n${web.markdown.slice(0, 3000)}`;
         }
 
-        await callTelegramApi(botToken, "sendMessage", {
+        await this.callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: formatMarkdownTablesForMobile(content),
         });
       } catch (reachErr) {
-        await callTelegramApi(botToken, "sendMessage", {
+        await this.callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: `❌ Reach failed: ${reachErr instanceof Error ? reachErr.message : String(reachErr)}`,
         });
@@ -633,7 +702,7 @@ export class TelegramGatewayService {
         `• *Consensus Ballots:* ${state.ballots.length}\n\n` +
         `*Recent Blackboard:*\n${recentBb || "_(none)_"}`;
 
-      await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: msg, parse_mode: "Markdown" });
+      await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: msg, parse_mode: "Markdown" });
       return;
     }
 
@@ -650,12 +719,12 @@ export class TelegramGatewayService {
       }
 
       if (!goal) {
-        await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /swarm [mesh|hierarchical|star|consensus] <goal>" });
+        await this.callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: "Usage: /swarm [mesh|hierarchical|star|consensus] <goal>" });
         return;
       }
 
       const session = swarmEngine.spawn(goal, topology);
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `🚀 *Swarm Spawned [${topology.toUpperCase()}]*\n\n*Goal:* "${goal}"\n*Agents Assigned:* ${session.agents.length}\n*Tasks Scheduled:* ${session.tasks.length}\n\n_Auto-executing swarm steps..._`,
         parse_mode: "Markdown",
@@ -665,7 +734,7 @@ export class TelegramGatewayService {
       for (let i = 0; i < 4; i++) {
         const stepRes = await swarmEngine.step(ctx);
         if (stepRes.session.status === "completed") {
-          await callTelegramApi(botToken, "sendMessage", {
+          await this.callTelegramApi(botToken, "sendMessage", {
             chat_id: chatId,
             text: `🏁 *Swarm Completed Successfully!*\n\n${stepRes.stepMessage}`,
             parse_mode: "Markdown",
@@ -679,7 +748,7 @@ export class TelegramGatewayService {
     // Reset/start fresh session command
     if (rawText === "/new" || rawText === "/reset") {
       db.prepare("DELETE FROM kv WHERE key = ?").run(`tg_session_${chatId}`);
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: "✨ *New Session Started*\n\nYour active chat session has been reset. The next message will spawn a fresh conversation visible in your K9 localhost dashboard.",
         parse_mode: "Markdown",
@@ -706,7 +775,7 @@ export class TelegramGatewayService {
     }
 
     // Send typing notification
-    await callTelegramApi(botToken, "sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
+    await this.callTelegramApi(botToken, "sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
 
     // Execute through Dot or Default Assistant with full Live DB persistence
     try {
@@ -726,7 +795,7 @@ export class TelegramGatewayService {
         const dots = listDots(ctx);
         const dot = dots.find((d) => d.name.toLowerCase() === targetDotName!.toLowerCase());
         if (!dot) {
-          await callTelegramApi(botToken, "sendMessage", {
+          await this.callTelegramApi(botToken, "sendMessage", {
             chat_id: chatId,
             text: `⚠️ Dot coworker "${targetDotName}" not found. Type /dots to view your active roster.`,
           });
@@ -785,7 +854,7 @@ export class TelegramGatewayService {
         });
 
         // 5. Send Telegram reply
-        await callTelegramApi(botToken, "sendMessage", {
+        await this.callTelegramApi(botToken, "sendMessage", {
           chat_id: chatId,
           text: formatMarkdownTablesForMobile(`🤖 *[${dot.name}]*\n\n${replyText}`),
           parse_mode: "Markdown",
@@ -868,12 +937,12 @@ export class TelegramGatewayService {
       });
 
       // 5. Send Telegram reply
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: formatMarkdownTablesForMobile(replyText),
       });
     } catch (err) {
-      await callTelegramApi(botToken, "sendMessage", {
+      await this.callTelegramApi(botToken, "sendMessage", {
         chat_id: chatId,
         text: `❌ Error: ${err instanceof Error ? err.message : String(err)}`,
       });
@@ -885,7 +954,7 @@ export class TelegramGatewayService {
     const queryId = callbackQuery.id;
 
     // Acknowledge callback query immediately
-    await callTelegramApi(botToken, "answerCallbackQuery", { callback_query_id: queryId, text: "Action processed" }).catch(() => {});
+    await this.callTelegramApi(botToken, "answerCallbackQuery", { callback_query_id: queryId, text: "Action processed" }).catch(() => {});
 
     // Handle tool approvals if formatted as "approve:<id>" or "deny:<id>"
     if (data && (data.startsWith("approve:") || data.startsWith("deny:"))) {

@@ -155,6 +155,18 @@ export function createSubject(ctx: ExamCtx, input: CreateSubjectInput): SubjectR
   return row;
 }
 
+export function deleteSubject(ctx: ExamCtx, id: number): void {
+  const existing = getSubject(ctx, id);
+  if (!existing)
+    throw new ExamError("not_found", `Subject ${id} not found`);
+  const tx = ctx.db.transaction(() => {
+    ctx.db.prepare("DELETE FROM study_logs WHERE subject_id = ?").run(id);
+    ctx.db.prepare("DELETE FROM exam_topics WHERE subject_id = ?").run(id);
+    ctx.db.prepare("DELETE FROM exam_subjects WHERE id = ?").run(id);
+  });
+  tx();
+}
+
 // ------------------------------------------------------------ topics
 
 export function listTopics(ctx: ExamCtx, subjectId: number): TopicRow[] {
@@ -262,10 +274,11 @@ export function deleteTopic(ctx: ExamCtx, subjectId: number, topicId: number): v
   const existing = getTopic(ctx, subjectId, topicId);
   if (!existing)
     throw new ExamError("not_found", `Topic ${topicId} not found in subject ${subjectId}`);
-  ctx.db.prepare(`
-    DELETE FROM study_logs WHERE topic_id = ?
-    DELETE FROM exam_topics WHERE id = ? AND subject_id = ?
-  `).run(topicId, topicId, subjectId);
+  const tx = ctx.db.transaction(() => {
+    ctx.db.prepare("DELETE FROM study_logs WHERE topic_id = ?").run(topicId);
+    ctx.db.prepare("DELETE FROM exam_topics WHERE id = ? AND subject_id = ?").run(topicId, subjectId);
+  });
+  tx();
 }
 
 // ------------------------------------------------------------ study logs

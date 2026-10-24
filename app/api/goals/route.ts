@@ -4,26 +4,41 @@
  * Data schema: goals, goal_milestones (lib/db/schema.ts)
  * User instruction: continue
  */
-import { requireVault } from "@/server/vault-guard";
-import { listGoals, createGoal } from "@/lib/goal-service";
+import { requireVault, vaultGuardResponse, internalResponse } from "@/server/vault-guard";
+import { listGoals, createGoal, GoalError } from "@/lib/goal-service";
 
 export async function GET() {
-  const ctx = await requireVault();
-  return Response.json({ goals: listGoals(ctx) });
+  try {
+    const ctx = await requireVault();
+    return Response.json({ goals: listGoals(ctx) });
+  } catch (e) {
+    const auth = vaultGuardResponse(e);
+    if (auth) return auth;
+    return internalResponse(e);
+  }
 }
 
 export async function POST(req: Request) {
-  const ctx = await requireVault();
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object")
-    return Response.json(
-      { error: { code: "invalid_body", message: "Bad request body" } },
-      { status: 400 },
-    );
-  const goal = createGoal(ctx, {
-    title: body.title,
-    description: body.description ?? null,
-    targetDate: body.targetDate ?? null,
-  });
-  return Response.json({ goal }, { status: 201 });
+  try {
+    const ctx = await requireVault();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object")
+      return Response.json(
+        { error: { code: "invalid_body", message: "Bad request body" } },
+        { status: 400 },
+      );
+    const goal = createGoal(ctx, {
+      title: body.title,
+      description: body.description ?? null,
+      targetDate: body.targetDate ?? null,
+    });
+    return Response.json({ goal }, { status: 201 });
+  } catch (e) {
+    const auth = vaultGuardResponse(e);
+    if (auth) return auth;
+    if (e instanceof GoalError && e.code === "invalid") {
+      return Response.json({ error: { code: "invalid", message: e.message } }, { status: 400 });
+    }
+    return internalResponse(e);
+  }
 }

@@ -52,7 +52,8 @@ export function listEvents(
     params.push(opts.before);
   }
   const where = wh.length ? `WHERE ${wh.join(" AND ")}` : "";
-  const limit = opts.limit ?? 500;
+  const rawLimit = Number(opts.limit);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(1000, rawLimit)) : 500;
 
   const rows = ctx.db.prepare(`
     SELECT id, title, start_at AS startAt, end_at AS endAt,
@@ -60,8 +61,8 @@ export function listEvents(
            created_at AS createdAt, updated_at AS updatedAt
     FROM events ${where}
     ORDER BY start_at ASC
-    LIMIT ${limit}
-  `).all(...params) as Array<Record<string, unknown>>;
+    LIMIT ?
+  `).all(...params, limit) as Array<Record<string, unknown>>;
 
   return rows.map((r) => eventRow(r));
 }

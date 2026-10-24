@@ -30,6 +30,9 @@ import {
   ArrowRight,
   PlusCircle,
   Keyboard,
+  Bot,
+  GitBranch,
+  Palette,
 } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { cyberAudio } from "@/lib/audio/cyberdeck-audio";
@@ -169,6 +172,33 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         shortcut: "G S",
         action: () => router.push("/settings"),
       },
+      {
+        id: "nav-dots",
+        title: "Dots & Coworkers",
+        subtitle: "Specialist AI agents with dedicated workspaces",
+        icon: Bot,
+        section: "Navigate",
+        shortcut: "G D",
+        action: () => router.push("/dots"),
+      },
+      {
+        id: "nav-workflows",
+        title: "Workflows & Recipes",
+        subtitle: "Automated multi-step Goose execution pipelines",
+        icon: GitBranch,
+        section: "Navigate",
+        shortcut: "G W",
+        action: () => router.push("/workflows"),
+      },
+      {
+        id: "nav-design-system",
+        title: "Design System",
+        subtitle: "Component library, tokens, and visual consistency",
+        icon: Palette,
+        section: "Navigate",
+        shortcut: "G I",
+        action: () => router.push("/design-system"),
+      },
     ];
 
     const actions: CommandItem[] = [
@@ -239,6 +269,30 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             window.dispatchEvent(new CustomEvent("phryvos:shortcuts"));
           }, 100);
         },
+      },
+      {
+        id: "act-new-dot",
+        title: "Create New Dot",
+        subtitle: "Spin up a specialist AI coworker",
+        icon: PlusCircle,
+        section: "Quick Actions",
+        action: () => router.push("/dots?create=true"),
+      },
+      {
+        id: "act-new-workflow",
+        title: "Create New Workflow",
+        subtitle: "Design a Goose automation recipe",
+        icon: PlusCircle,
+        section: "Quick Actions",
+        action: () => router.push("/workflows?create=true"),
+      },
+      {
+        id: "act-new-component",
+        title: "Create Design System Component",
+        subtitle: "Add a new component to the library",
+        icon: PlusCircle,
+        section: "Quick Actions",
+        action: () => router.push("/design-system?create=true"),
       },
     ];
 

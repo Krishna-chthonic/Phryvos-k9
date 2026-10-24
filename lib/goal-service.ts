@@ -180,10 +180,11 @@ export function deleteGoal(ctx: GoalCtx, id: number): void {
   const existing = getGoal(ctx, id);
   if (!existing)
     throw new GoalError("not_found", `Goal ${id} not found`);
-  ctx.db.prepare(`
-    DELETE FROM goal_milestones WHERE goal_id = ?
-    DELETE FROM goals WHERE id = ?
-  `).run(id, id);
+  const tx = ctx.db.transaction(() => {
+    ctx.db.prepare("DELETE FROM goal_milestones WHERE goal_id = ?").run(id);
+    ctx.db.prepare("DELETE FROM goals WHERE id = ?").run(id);
+  });
+  tx();
 }
 
 function computeProgress(goal: GoalRow): number {

@@ -85,11 +85,14 @@ function parseTags(raw: string | null): string[] {
   }
 }
 
-function mapTask(r: Record<string, unknown>, db: Database.Database): TaskRow {
-  const projectRow = r.projectId != null
-    ? db.prepare("SELECT title FROM projects WHERE id = ?").get(r.projectId as number) as { title: string } | undefined
-    : undefined;
-  const projectTitle = projectRow?.title ?? null;
+function mapTask(r: Record<string, unknown>, db?: Database.Database): TaskRow {
+  let projectTitle: string | null = null;
+  if ("projectTitle" in r) {
+    projectTitle = (r.projectTitle as string | null) ?? null;
+  } else if (r.projectId != null && db) {
+    const projectRow = db.prepare("SELECT title FROM projects WHERE id = ?").get(r.projectId as number) as { title: string } | undefined;
+    projectTitle = projectRow?.title ?? null;
+  }
   return {
     id: r.id as number,
     projectId: (r.projectId as number | null) ?? null,
@@ -275,10 +278,11 @@ export function deleteProject(ctx: TrackingCtx, id: number): void {
 
 // ------------------------------------------------------------ tasks
 
-const TASK_SELECT = `SELECT t.id, t.project_id AS projectId, t.title, t.description,
+const TASK_SELECT = `SELECT t.id, t.project_id AS projectId, p.title AS projectTitle, t.title, t.description,
       t.status, t.priority, t.due_date AS dueDate, t.start_date AS startDate,
       t.tags, t.completed_at AS completedAt, t.created_at AS createdAt, t.updated_at AS updatedAt
-    FROM tasks t`;
+    FROM tasks t
+    LEFT JOIN projects p ON p.id = t.project_id`;
 
 export function listTasks(
   ctx: TrackingCtx,

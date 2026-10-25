@@ -39,7 +39,9 @@ export function createSession(
   vaultType: "real" | "decoy" = "real",
 ): string {
   const token = randomBytes(32).toString("base64url");
-  store().set(token, { token, masterKey, expiresAt: Date.now() + ttlMs, vaultType });
+  // Copy the master key to prevent shared reference issues
+  const keyCopy = Buffer.from(masterKey);
+  store().set(token, { token, masterKey: keyCopy, expiresAt: Date.now() + ttlMs, vaultType });
   return token;
 }
 
@@ -73,11 +75,20 @@ export function getActiveMasterKey(): Buffer | null {
 }
 
 export function destroySession(token: string | null | undefined): void {
-  if (token) store().delete(token);
+  if (token) {
+    const entry = store().get(token);
+    if (entry) {
+      entry.masterKey.fill(0); // Zero master key from RAM
+    }
+    store().delete(token);
+  }
 }
 
 /** Invalidate all active vault sessions. */
 export function destroyAllSessions(): void {
+  for (const [, session] of store()) {
+    session.masterKey.fill(0); // Zero master key from RAM
+  }
   store().clear();
 }
 

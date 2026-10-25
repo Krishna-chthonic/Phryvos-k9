@@ -143,25 +143,26 @@ export const MessageRow = memo(function MessageRow({
       id={`message-${msg.id}`}
       className={`group flex w-full ${
         user ? "justify-end" : "justify-start"
-      } px-2 sm:px-4 py-2 select-text`}
+      } px-3 py-3.5 sm:px-6 lg:px-10 select-text`}
     >
       <div
         className={`relative ${
           user
-            ? "max-w-[560px] bg-[var(--bg-2)] text-[var(--fg-0)] border border-[var(--border-subtle)] rounded-[14px_14px_4px_14px] px-3.5 py-2.5 shadow-none"
-            : "w-full max-w-[680px] text-[var(--fg-0)] py-2 px-1 leading-[22px]"
+             ? "max-w-[620px] bg-[var(--fg-0)] text-[var(--bg-0)] rounded-[18px_18px_5px_18px] px-4 py-3 shadow-[0_8px_20px_rgba(29,27,23,0.08)]"
+             : "w-full max-w-[790px] text-[var(--fg-0)] py-1 px-0 leading-[24px]"
         }`}
       >
         {/* Assistant Sparkle Avatar on Top */}
         {!user && (
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-[var(--radius-xs)] bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
-                <Sparkles className="h-3 w-3 stroke-[1.5]" />
-              </div>
-              <span className="text-[11px] font-semibold text-[var(--fg-1)] uppercase tracking-wider">
-                Phryvos AI
-              </span>
+           <div className="flex items-center justify-between mb-3">
+             <div className="flex items-center gap-2">
+               <div className="h-7 w-7 rounded-xl bg-[var(--fg-0)] text-[var(--bg-0)] flex items-center justify-center shrink-0 shadow-sm">
+                 <Sparkles className="h-3 w-3 stroke-[1.5]" />
+               </div>
+               <div>
+                 <span className="block text-xs font-semibold tracking-[-0.01em] text-[var(--fg-0)]">Phryvos</span>
+                 <span className="block text-[10px] text-[var(--fg-3)]">Personal intelligence</span>
+               </div>
             </div>
             {/* CHAT-55: Telemetry pill for completed assistant messages */}
             {!streaming && msg.telemetry && (
@@ -186,7 +187,7 @@ export const MessageRow = memo(function MessageRow({
 
         {/* Content */}
         {user ? (
-          <div className="whitespace-pre-wrap text-[var(--text-md)] leading-relaxed text-[var(--fg-0)]">
+           <div className="whitespace-pre-wrap text-[var(--text-md)] leading-relaxed text-[var(--bg-0)]">
             {renderHighlightedText(body, searchQuery)}
           </div>
         ) : (

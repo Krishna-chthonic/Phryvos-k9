@@ -1087,7 +1087,7 @@ export function ChatApp() {
 
     if (isEditing) {
       return (
-        <div key={s.id} className="flex items-center gap-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-850 px-2.5 py-1.5 my-0.5">
+        <div key={s.id} className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--bg-2)] px-2.5 py-1.5 my-0.5">
           <input
             type="text"
             value={editingSessionTitle}
@@ -1098,7 +1098,7 @@ export function ChatApp() {
             }}
             autoFocus
             onBlur={() => handleRenameSession(s.id, editingSessionTitle)}
-            className="w-full rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-xs text-zinc-800 dark:text-zinc-200 outline-none"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-1)] px-2 py-1 text-xs text-[var(--fg-0)] outline-none focus:border-[var(--accent)]"
           />
         </div>
       );
@@ -1108,15 +1108,15 @@ export function ChatApp() {
       <div
         key={s.id}
         onClick={() => !streaming && loadMessages(s.id)}
-        className={`group flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-all my-0.5 ${
+        className={`group flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2.5 text-sm transition-all my-0.5 ${
           s.id === active
-            ? "bg-zinc-200/90 font-medium text-zinc-900 shadow-2xs dark:bg-zinc-800 dark:text-zinc-100"
-            : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+            ? "bg-[var(--bg-2)] font-semibold text-[var(--fg-0)] shadow-[inset_0_0_0_1px_var(--border)]"
+            : "text-[var(--fg-1)] hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
         }`}
       >
         <MessageSquare
           className={`h-4 w-4 shrink-0 ${
-            s.id === active ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400"
+          s.id === active ? "text-[var(--accent)]" : "text-[var(--fg-3)]"
           }`}
         />
         <span className="min-w-0 flex-1 truncate text-xs" title={s.title || "New chat"}>
@@ -1124,7 +1124,7 @@ export function ChatApp() {
         </span>
         <span
           className={`shrink-0 text-[10px] ${
-            s.id === active ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400"
+            s.id === active ? "text-[var(--fg-1)]" : "text-[var(--fg-3)]"
           }`}
         >
           {when(s.updatedAt || s.createdAt)}
@@ -1137,8 +1137,8 @@ export function ChatApp() {
               e.stopPropagation();
               togglePinSession(s.id);
             }}
-            className={`flex h-6 w-6 items-center justify-center rounded-md hover:bg-zinc-200/70 dark:hover:bg-zinc-750 ${
-              isPinned ? "text-amber-500" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            className={`flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] hover:bg-[var(--bg-3)] ${
+              isPinned ? "text-[var(--warning)]" : "text-[var(--fg-3)] hover:text-[var(--fg-1)]"
             }`}
             title={isPinned ? "Unpin chat" : "Pin chat"}
             aria-label={isPinned ? "Unpin chat" : "Pin chat"}
@@ -1151,7 +1151,7 @@ export function ChatApp() {
               setEditingSessionId(s.id);
               setEditingSessionTitle(s.title || "");
             }}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70 dark:hover:text-zinc-300 dark:hover:bg-zinc-750"
+            className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-3)] hover:text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
             title="Rename chat"
             aria-label="Rename chat"
           >
@@ -1162,7 +1162,7 @@ export function ChatApp() {
               e.stopPropagation();
               setConfirmDeleteId(s.id);
             }}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40"
+            className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)]"
             title="Delete chat"
             aria-label="Delete chat"
           >
@@ -1174,66 +1174,69 @@ export function ChatApp() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-1 overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex h-full min-h-0 flex-1 overflow-hidden workspace-surface">
       {/* Mobile History Backdrop */}
       {mobileRailOpen && (
         <div
           onClick={() => setMobileRailOpen(false)}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-40 bg-black/45 backdrop-blur-xs md:hidden"
         />
       )}
 
       {/* Session Rail (Desktop Collapsible & Mobile Slide-over Drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-zinc-200 bg-white transition-all duration-300 ease-in-out md:static dark:border-zinc-800 dark:bg-zinc-950 ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-1)]/95 transition-all duration-300 ease-in-out md:static ${
           mobileRailOpen ? "translate-x-0 shadow-2xl w-72" : "-translate-x-full md:translate-x-0"
         } ${
           desktopRailOpen ? "md:w-64" : "md:w-0 md:border-r-0 md:overflow-hidden"
         }`}
       >
-        <div className="flex h-14 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-3.5">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Chat History
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
+          <div className="border-b border-[var(--border-subtle)] px-4 pb-4 pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="quiet-label">Conversation library</div>
+                <div className="mt-1 text-base font-semibold tracking-[-0.02em] text-[var(--fg-0)]">Your thinking space</div>
+              </div>
+              <button
+                onClick={() => setMobileRailOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--fg-2)] hover:bg-[var(--bg-2)] md:hidden"
+                aria-label="Close chat history"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
             <button
               onClick={newChat}
               disabled={busy || streaming}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--fg-0)] text-xs font-semibold text-[var(--bg-0)] shadow-sm transition hover:opacity-90 disabled:opacity-40"
               title="New chat"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>New</span>
-            </button>
-            <button
-              onClick={() => setMobileRailOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 md:hidden"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setDesktopRailOpen(false)}
-              className="hidden md:flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              title="Collapse chat history"
-            >
-              <PanelLeft className="h-4 w-4" />
+              <span>Start a new conversation</span>
             </button>
           </div>
-        </div>
 
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+          <div className="flex items-center justify-between px-4 pb-2 pt-4">
+            <span className="quiet-label">Recent conversations</span>
+            <button
+              onClick={() => loadSessions()}
+              className="text-[10px] font-medium text-[var(--fg-3)] transition hover:text-[var(--fg-1)]"
+              title="Refresh conversations"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2.5 pb-3">
           {sessions.length === 0 ? (
-            <div className="p-4 text-center text-xs text-zinc-400">
-              No conversations yet. Start one!
+            <div className="mx-1 mt-2 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg-0)]/60 p-4 text-center text-xs leading-relaxed text-[var(--fg-2)]">
+              Your next useful conversation starts here.
             </div>
           ) : (
             <>
               {pinnedSessions.length > 0 && (
-                <div className="mb-2">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                    <div className="mb-3">
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-3)] flex items-center gap-1">
                     <Pin className="h-3 w-3" />
                     <span>Pinned</span>
                   </div>
@@ -1243,8 +1246,8 @@ export function ChatApp() {
               {sections.map(
                 (sec) =>
                   sec.items.length > 0 && (
-                    <div key={sec.label} className="mb-2">
-                      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                    <div key={sec.label} className="mb-3">
+                      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fg-3)]">
                         {sec.label}
                       </div>
                       {sec.items.map(renderSessionItem)}
@@ -1255,8 +1258,23 @@ export function ChatApp() {
           )}
         </div>
 
-        {providers.length === 0 && (
-          <div className="border-t border-zinc-100 dark:border-zinc-800 bg-amber-50/60 dark:bg-amber-950/30 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+          <div className="border-t border-[var(--border-subtle)] p-3">
+            <div className="flex items-center gap-2 rounded-2xl bg-[var(--bg-0)] p-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold text-[var(--fg-0)]">Private by default</div>
+                <div className="mt-0.5 truncate text-[10px] text-[var(--fg-2)]">
+                  {providers.length > 0 ? "AI connection ready" : "Connect an AI provider"}
+                </div>
+              </div>
+              <span className={`h-1.5 w-1.5 rounded-full ${providers.length > 0 ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
+            </div>
+          </div>
+
+          {providers.length === 0 && (
+          <div className="border-t border-[var(--border-subtle)] bg-[var(--warning-soft)] p-3 text-xs leading-relaxed text-[var(--warning)]">
             No AI provider linked. Add one in{" "}
             <a href="/settings" className="font-semibold underline">
               Settings
@@ -1267,15 +1285,15 @@ export function ChatApp() {
       </aside>
 
       {/* Main Chat View */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-zinc-950">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Single Consolidated Chat Header */}
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800 px-2 sm:px-3 md:px-4 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-sm gap-1.5 sm:gap-2">
+        <div className="flex min-h-16 shrink-0 items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--bg-1)]/75 px-3 sm:px-5 md:px-8 backdrop-blur-xl gap-2">
           {/* Left section: Navigation & History controls */}
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
             {/* Mobile Main Menu Drawer trigger */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("phryvos:open-menu"))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0"
+              className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--fg-1)] transition hover:bg-[var(--bg-2)] active:scale-95 md:hidden shrink-0"
               title="Open Navigation Menu"
               aria-label="Open Navigation Menu"
             >
@@ -1285,7 +1303,7 @@ export function ChatApp() {
             {/* Mobile Chat History trigger */}
             <button
               onClick={() => setMobileRailOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-100 active:scale-95 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 md:hidden shrink-0"
+              className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--fg-1)] transition hover:bg-[var(--bg-2)] active:scale-95 md:hidden shrink-0"
               title="Chat History"
               aria-label="Chat History"
             >
@@ -1295,7 +1313,7 @@ export function ChatApp() {
             {/* Desktop Chat History toggle */}
             <button
               onClick={() => setDesktopRailOpen((p) => !p)}
-              className="hidden md:flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900 transition shrink-0"
+              className="hidden md:flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] px-2 text-xs font-medium text-[var(--fg-1)] hover:bg-[var(--bg-2)] transition shrink-0"
               title="Toggle chat history"
               aria-label="Toggle chat history"
             >
@@ -1325,7 +1343,7 @@ export function ChatApp() {
                     setEditingSessionTitle(activeSession.title || "");
                   }
                 }}
-                className="hidden sm:inline truncate text-xs md:text-sm font-semibold text-zinc-800 dark:text-zinc-100 max-w-[100px] md:max-w-[180px] cursor-pointer hover:underline"
+                className="hidden sm:inline truncate text-sm md:text-base font-semibold tracking-[-0.02em] text-[var(--fg-0)] max-w-[140px] md:max-w-[240px] cursor-pointer hover:underline"
                 title="Click to rename"
               >
                 {activeSession ? activeSession.title || "New chat" : "AI Assistant"}
@@ -1340,7 +1358,7 @@ export function ChatApp() {
                   onChange={(e) =>
                     pickProvider(e.target.value === "" ? "" : Number(e.target.value))
                   }
-                  className="h-8 max-w-[85px] sm:max-w-[120px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                    className="h-9 max-w-[85px] sm:max-w-[130px] truncate rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-0)] px-2 text-xs font-medium text-[var(--fg-1)] outline-none focus:border-[var(--accent)]"
                   title="Select Provider"
                 >
                   <option value="">No provider</option>
@@ -1356,7 +1374,7 @@ export function ChatApp() {
                 <select
                   value={model}
                   onChange={(e) => pickModel(e.target.value)}
-                  className="h-8 max-w-[110px] xs:max-w-[140px] sm:max-w-[180px] truncate rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                    className="h-9 max-w-[110px] xs:max-w-[140px] sm:max-w-[200px] truncate rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-0)] px-2.5 text-xs font-medium text-[var(--fg-1)] outline-none focus:border-[var(--accent)]"
                   title="Model"
                 >
                   {modelOptions.map((m) => (
@@ -1374,7 +1392,7 @@ export function ChatApp() {
                     if (e.key === "Enter") pickModel(model);
                   }}
                   placeholder="model id…"
-                  className="h-8 w-24 sm:w-32 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 outline-none"
+                  className="h-8 w-24 sm:w-32 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] px-2 text-xs text-[var(--fg-1)] outline-none focus:border-[var(--accent)]"
                 />
               )}
             </div>
@@ -1398,7 +1416,7 @@ export function ChatApp() {
             {!streaming && lastMsg?.role === "assistant" && (
               <button
                 onClick={() => send({ regenerate: true })}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] hover:bg-[var(--bg-2)] active:scale-95 text-[var(--fg-1)] transition"
                 title="Regenerate last reply"
                 aria-label="Retry"
               >
@@ -1412,7 +1430,7 @@ export function ChatApp() {
                 setMemoryDrawerSeedPoint("");
                 setMemoryDrawerOpen(true);
               }}
-              className="flex h-8 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition text-xs font-medium cursor-pointer"
+              className="flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] px-2.5 hover:bg-[var(--bg-2)] active:scale-95 text-[var(--fg-1)] transition text-xs font-medium cursor-pointer"
               title="Permanent Memory & Provenance"
               aria-label="Permanent Memory"
             >
@@ -1434,8 +1452,8 @@ export function ChatApp() {
                     return next;
                   });
                 }}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition cursor-pointer ${
-                  searchOpen ? "bg-zinc-150 dark:bg-zinc-800 ring-2 ring-zinc-400" : ""
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] hover:bg-[var(--bg-2)] active:scale-95 text-[var(--fg-1)] transition cursor-pointer ${
+                  searchOpen ? "bg-[var(--accent-soft)] ring-2 ring-[var(--accent-border)]" : ""
                 }`}
                 title="Search in conversation (Ctrl+F)"
                 aria-label="Search conversation"
@@ -1448,8 +1466,8 @@ export function ChatApp() {
             <div className="relative" ref={moreMenuRef}>
               <button
                 onClick={() => setMoreMenuOpen((o) => !o)}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-2xs hover:bg-zinc-50 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-300 transition cursor-pointer ${
-                  moreMenuOpen ? "bg-zinc-150 dark:bg-zinc-800 ring-2 ring-zinc-400" : ""
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] hover:bg-[var(--bg-2)] active:scale-95 text-[var(--fg-1)] transition cursor-pointer ${
+                  moreMenuOpen ? "bg-[var(--accent-soft)] ring-2 ring-[var(--accent-border)]" : ""
                 }`}
                 title="More Actions"
                 aria-label="More Actions"
@@ -1660,49 +1678,61 @@ export function ChatApp() {
           <div
             ref={listRef}
             onScroll={handleScroll}
-            className="min-h-0 flex-1 overflow-y-auto py-4 bg-white dark:bg-zinc-950"
+            className="min-h-0 flex-1 overflow-y-auto py-5 bg-[var(--bg-0)]"
           >
-          {!active && messages.length === 0 && !streamText && !streaming ? (
-            <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center px-4 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg ring-4 ring-zinc-100 dark:bg-zinc-800 dark:ring-zinc-800">
-                <Sparkles className="h-7 w-7 text-emerald-400" />
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-                What can I help with today?
-              </h2>
-              <p className="mt-1.5 text-xs md:text-sm text-zinc-500 dark:text-zinc-400 max-w-xl">
-                I am connected to your encrypted personal vault. I can read & write files, manage tasks, plan exams, compute math, and search the web.
-              </p>
+           {!active && messages.length === 0 && !streamText && !streaming ? (
+             <div className="mx-auto flex h-full w-full max-w-5xl flex-col justify-center px-5 py-10 sm:px-8 lg:px-12">
+               <div className="flex items-center gap-2 text-xs font-medium text-[var(--fg-2)]">
+                 <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[var(--fg-0)] text-[var(--bg-0)]">
+                   <Sparkles className="h-3.5 w-3.5" />
+                 </span>
+                 <span>Personal AI workspace</span>
+                 <span className="h-1 w-1 rounded-full bg-[var(--success)]" />
+                 <span className="text-[var(--fg-3)]">Ready when you are</span>
+               </div>
+               <div className="mt-7 max-w-2xl">
+                 <p className="quiet-label">A calmer place to think</p>
+                 <h2 className="mt-3 text-3xl font-semibold tracking-[-0.045em] text-[var(--fg-0)] sm:text-5xl sm:leading-[1.05]">
+                   What are we working on <span className="text-[var(--accent)]">today?</span>
+                 </h2>
+                 <p className="mt-5 max-w-xl text-sm leading-7 text-[var(--fg-2)] sm:text-base">
+                   Bring a question, a rough idea, or a half-finished plan. Phryvos can turn it into something clear, useful, and yours.
+                 </p>
+               </div>
 
-              {/* 4 Interactive Suggestion Cards */}
-              <div className="mt-8 grid w-full grid-cols-1 sm:grid-cols-2 gap-3 text-left">
-                {SUGGESTIONS.map((s, idx) => {
-                  const Icon = s.icon;
-                  return (
+               {/* 4 Interactive Suggestion Cards */}
+               <div className="mt-10 grid w-full max-w-4xl grid-cols-1 gap-3 text-left sm:grid-cols-2">
+                 {SUGGESTIONS.map((s, idx) => {
+                   const Icon = s.icon;
+                   return (
                     <button
                       key={idx}
                       onClick={() => {
                         setDraft(s.prompt);
                         textareaRef.current?.focus();
                       }}
-                      className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-3.5 shadow-2xs transition hover:border-zinc-400 hover:shadow-xs active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:group-hover:bg-zinc-700 transition">
-                          <Icon className="h-3.5 w-3.5" />
-                        </div>
-                        <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                          {s.title}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                        {s.prompt}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                       className="group flex min-h-[132px] flex-col justify-between rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-1)] p-4 shadow-[0_8px_24px_rgba(45,38,29,0.03)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent-border)] hover:bg-[var(--accent-soft)] active:scale-[0.99]"
+                     >
+                       <div className="flex items-center justify-between gap-2">
+                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--bg-2)] text-[var(--fg-1)] transition group-hover:bg-[var(--bg-1)] group-hover:text-[var(--accent)]">
+                           <Icon className="h-3.5 w-3.5" />
+                         </div>
+                         <ArrowUp className="h-4 w-4 rotate-45 text-[var(--fg-3)] transition group-hover:text-[var(--accent)]" />
+                       </div>
+                       <div>
+                         <span className="text-sm font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{s.title}</span>
+                         <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--fg-2)]">{s.prompt}</p>
+                       </div>
+                     </button>
+                   );
+                 })}
+               </div>
+               <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[var(--fg-3)]">
+                 <span className="flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Persistent memory</span>
+                 <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Private workspace</span>
+                 <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> Reasoning modes</span>
+               </div>
+             </div>
           ) : (
             <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8">
               {/* Compaction notice banner if session was summarized */}
@@ -1835,8 +1865,8 @@ export function ChatApp() {
         </div>
 
         {/* Composer (ChatGPT/Gemini rounded pill style with ArrowUp mobile send button) */}
-        <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 px-3 py-3 md:px-4">
-          <div className="mx-auto w-full max-w-5xl">
+        <div className="shrink-0 border-t border-[var(--border-subtle)] bg-[var(--bg-1)]/70 px-3 pb-4 pt-4 backdrop-blur-xl md:px-4">
+           <div className="mx-auto w-full max-w-5xl">
             {approval && (
               <ApprovalDialog
                 approval={approval}
@@ -1857,11 +1887,11 @@ export function ChatApp() {
                     <img
                       src={`data:${p.mediaType ?? "image/png"};base64,${p.dataBase64}`}
                       alt="attachment"
-                      className="h-16 rounded-xl object-cover ring-1 ring-zinc-200"
+                      className="h-16 rounded-[var(--radius-md)] object-cover ring-1 ring-[var(--border)]"
                     />
                     <button
                       onClick={() => setAttach((a) => (a ? a.filter((_, j) => j !== i) : a))}
-                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-white shadow"
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--fg-0)] text-[var(--bg-0)] shadow"
                       title="Remove"
                     >
                       <X className="h-3 w-3" />
@@ -1871,8 +1901,17 @@ export function ChatApp() {
               </div>
             )}
 
-            {/* Pill Container */}
-            <div className="flex items-end gap-1.5 sm:gap-2 rounded-3xl border border-zinc-300 bg-white p-2 shadow-xs transition-all focus-within:border-zinc-400 focus-within:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+             <div className="mb-2 flex items-center justify-between px-1 text-[11px]">
+               <div className="flex items-center gap-2 text-[var(--fg-2)]">
+                 <span className="font-semibold text-[var(--fg-1)]">Message Phryvos</span>
+                 <span className="h-1 w-1 rounded-full bg-[var(--success)]" />
+                 <span>Private context on</span>
+               </div>
+               <span className="hidden text-[var(--fg-3)] sm:inline">Enter to send · Shift + Enter for a new line</span>
+             </div>
+
+             {/* Composed input card */}
+             <div className="workspace-panel flex items-end gap-1.5 rounded-2xl p-2.5 transition-all focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)] sm:gap-2">
               <input
                 ref={fileRef}
                 type="file"
@@ -1890,7 +1929,7 @@ export function ChatApp() {
                 onClick={() => fileRef.current?.click()}
                 title="Attach images"
                 aria-label="Attach images"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 transition"
+                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[var(--fg-2)] transition hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
               >
                 <ImagePlus className="h-4 w-4" />
               </button>
@@ -1920,7 +1959,7 @@ export function ChatApp() {
                 }}
                 rows={1}
                 placeholder="Ask anything or message your vault… (Ctrl+K)"
-                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-2 text-sm text-zinc-800 dark:text-zinc-100 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+                className="max-h-36 min-h-[38px] w-full resize-none bg-transparent px-2 py-2 text-sm text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-2)]"
               />
 
               {/* Iconic ChatGPT / Gemini Send Button (Round black with ArrowUp) */}
@@ -1930,7 +1969,7 @@ export function ChatApp() {
                   onClick={stop}
                   title="Stop generating"
                   aria-label="Stop generating"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white shadow-md transition hover:bg-zinc-800 active:scale-95 dark:bg-zinc-100 dark:text-zinc-900"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--fg-0)] text-[var(--bg-0)] shadow-sm transition hover:opacity-85 active:scale-95"
                 >
                   <Square className="h-4 w-4 fill-white dark:fill-zinc-900" />
                 </button>
@@ -1948,17 +1987,18 @@ export function ChatApp() {
                   aria-label="Send message"
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 shadow-md ${
                     canSend
-                      ? "bg-zinc-900 text-white hover:bg-zinc-800 active:scale-95 cursor-pointer dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-                      : "bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600 cursor-not-allowed"
+                      ? "bg-[var(--fg-0)] text-[var(--bg-0)] hover:opacity-85 active:scale-95 cursor-pointer"
+                      : "bg-[var(--bg-3)] text-[var(--fg-3)] cursor-not-allowed"
                   }`}
                 >
                   <ArrowUp className="h-5 w-5 stroke-[2.5]" />
                 </button>
               )}
             </div>
-            <div className="mt-1 text-center text-[10px] text-zinc-400">
-              AI operations on files and database are protected by local encryption and approvals.
-            </div>
+             <div className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-[var(--fg-3)]">
+               <ShieldCheck className="h-3 w-3" />
+               <span>Your local workspace stays protected by encryption and approval controls.</span>
+             </div>
           </div>
         </div>
         {/* Citation cables overlay, Artifact drawer & Memory drawer */}
@@ -2057,4 +2097,3 @@ export function ChatApp() {
     </div>
   );
 }
-

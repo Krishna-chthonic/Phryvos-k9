@@ -82,6 +82,16 @@ fi
 npm install --legacy-peer-deps
 echo -e "${GREEN}✔ Dependencies installed.${NC}"
 
+# Verify the native SQLite binding with the same glibc Node runtime used to
+# run the server. This prevents Android Bionic Node from being used against
+# the Linux ARM64 prebuild when installing from Termux.
+if ! node -e "const Database = require('better-sqlite3'); const db = new Database(':memory:'); db.close();"; then
+    echo -e "${RED}Error: better-sqlite3 could not load with the glibc Node runtime.${NC}"
+    echo "Run this installer from the PRoot/glibc environment with /usr/bin first in PATH."
+    exit 1
+fi
+echo -e "${GREEN}✔ Native SQLite binding verified with the glibc runtime.${NC}"
+
 echo -e "Building Next.js application..."
 npm run build
 echo -e "${GREEN}✔ Build completed successfully.${NC}"

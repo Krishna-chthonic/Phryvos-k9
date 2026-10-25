@@ -39,67 +39,67 @@ const config: Config = {
         'danger-soft': 'var(--danger-soft)',
 
         /* Core semantic colors (mapped to CSS custom properties) */
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        border: "hsl(var(--color-border))",
+        input: "hsl(var(--color-input))",
+        ring: "hsl(var(--color-ring))",
+        background: "hsl(var(--color-background))",
+        foreground: "hsl(var(--color-foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "hsl(var(--color-primary))",
+          foreground: "hsl(var(--color-primary-foreground))",
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          DEFAULT: "hsl(var(--color-secondary))",
+          foreground: "hsl(var(--color-secondary-foreground))",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: "hsl(var(--color-destructive))",
+          foreground: "hsl(var(--color-destructive-foreground))",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "hsl(var(--color-muted))",
+          foreground: "hsl(var(--color-muted-foreground))",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "hsl(var(--color-accent))",
+          foreground: "hsl(var(--color-accent-foreground))",
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "hsl(var(--color-popover))",
+          foreground: "hsl(var(--color-popover-foreground))",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "hsl(var(--color-card))",
+          foreground: "hsl(var(--color-card-foreground))",
         },
 
         /* Extended semantic tokens (Phase 2) */
         success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
+          DEFAULT: "hsl(var(--color-success))",
+          foreground: "hsl(var(--color-success-foreground))",
         },
         warning: {
-          DEFAULT: "hsl(var(--warning))",
-          foreground: "hsl(var(--warning-foreground))",
+          DEFAULT: "hsl(var(--color-warning))",
+          foreground: "hsl(var(--color-warning-foreground))",
         },
         info: {
-          DEFAULT: "hsl(var(--info))",
-          foreground: "hsl(var(--info-foreground))",
+          DEFAULT: "hsl(var(--color-info))",
+          foreground: "hsl(var(--color-info-foreground))",
         },
 
         /* Vault-specific states */
         vault: {
-          locked: "hsl(var(--vault-locked))",
-          unlocked: "hsl(var(--vault-unlocked))",
-          decoy: "hsl(var(--vault-decoy))",
+          locked: "hsl(var(--color-vault-locked))",
+          unlocked: "hsl(var(--color-vault-unlocked))",
+          decoy: "hsl(var(--color-vault-decoy))",
         },
 
         /* AI streaming states */
         ai: {
-          thinking: "hsl(var(--ai-thinking))",
-          streaming: "hsl(var(--ai-streaming))",
-          approval: "hsl(var(--ai-approval))",
-          error: "hsl(var(--ai-error))",
+          thinking: "hsl(var(--color-ai-thinking))",
+          streaming: "hsl(var(--color-ai-streaming))",
+          approval: "hsl(var(--color-ai-approval))",
+          error: "hsl(var(--color-ai-error))",
         },
 
         /* Code/Editor syntax (for future token-based theming) */

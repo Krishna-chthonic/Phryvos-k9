@@ -132,8 +132,8 @@ export function FloatingAssistant({ open, onClose }: FloatingAssistantProps) {
             <span className="text-[var(--text-sm)] font-medium text-[var(--fg-0)]">
               Quick Assistant
             </span>
-            <span className="ml-2 text-[10px] text-[var(--fg-2)] bg-[var(--bg-2)] px-1.5 py-0.2 rounded-full border border-[var(--border-subtle)]">
-              Quick help
+            <span className="ml-2 text-[10px] text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.2 rounded-full border border-[var(--accent-border)]">
+              Floating
             </span>
           </div>
         </div>

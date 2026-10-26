@@ -7,15 +7,15 @@
   },
   "private": true,
   "scripts": {
-    "dev": "env PATH=/usr/bin:/bin:$PATH next dev --webpack",
-    "build": "env PATH=/usr/bin:/bin:$PATH next build --webpack",
-    "start": "env PATH=/usr/bin:/bin:$PATH next start",
-    "lint": "env PATH=/usr/bin:/bin:$PATH eslint",
-    "typecheck": "env PATH=/usr/bin:/bin:$PATH tsc --noEmit",
-    "test": "env PATH=/usr/bin:/bin:$PATH node ./node_modules/.bin/tsx --test tests/*.test.ts",
-    "test:e2e": "env PATH=/usr/bin:/bin:$PATH playwright test",
-    "db:generate": "env PATH=/usr/bin:/bin:$PATH drizzle-kit generate --config ./drizzle.config.ts",
-    "monaco:copy": "env PATH=/usr/bin:/bin:$PATH node -e \"require('node:fs').cpSync('node_modules/monaco-editor/min/vs','public/monaco/vs',{recursive:true})\""
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node ./node_modules/.bin/tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "monaco:copy": "node -e \"require('node:fs').cpSync('node_modules/monaco-editor/min/vs','public/monaco/vs',{recursive:true})\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

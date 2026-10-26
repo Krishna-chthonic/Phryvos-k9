@@ -68,6 +68,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       setSelectedIndex(0);
       setFileHits([]);
       setTimeout(() => inputRef.current?.focus(), 50);
+      cyberAudio.playNotification();
     }
   }, [open]);
 

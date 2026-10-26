@@ -100,8 +100,8 @@ export function ModeAndEffortMenu({
         aria-expanded={open}
         className={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-40 ${
           open
-             ? "bg-[var(--fg-0)] text-[var(--bg-0)] shadow-sm"
-             : "text-[var(--fg-2)] hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
+            ? "bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900"
+            : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         }`}
       >
         <Plus
@@ -117,25 +117,25 @@ export function ModeAndEffortMenu({
 
       {/* Floating Popover Menu */}
       {open && (
-        <div className="absolute bottom-12 left-0 z-50 w-80 max-w-[88vw] rounded-2xl border border-[var(--border)] bg-[var(--bg-1)]/95 p-3.5 shadow-[var(--shadow-popover)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute bottom-12 left-0 z-50 w-80 max-w-[88vw] rounded-2xl border border-zinc-200/90 bg-white/95 p-3.5 shadow-xl backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95 animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2.5">
+          <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5 dark:border-zinc-800">
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--fg-0)] text-[var(--bg-0)]">
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">
                 <Sparkles className="h-3.5 w-3.5" />
               </div>
               <div>
-                <div className="text-xs font-semibold text-[var(--fg-0)]">
+                <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                   AI Mode & Effort
                 </div>
-                <div className="text-[10px] font-medium text-[var(--success)]">
+                <div className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                   {currentMode.name} · {currentEffort.name}
                 </div>
               </div>
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="flex h-6 w-6 items-center justify-center rounded-lg text-[var(--fg-3)] hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)]"
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -143,7 +143,7 @@ export function ModeAndEffortMenu({
 
           {/* Section 1: AI Modes */}
           <div className="pt-2.5">
-              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--fg-3)]">
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               Select AI Mode
             </div>
             <div className="space-y-1">
@@ -159,16 +159,16 @@ export function ModeAndEffortMenu({
                     onClick={() => onModeChange(mKey)}
                     className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-xs transition cursor-pointer ${
                       isActive
-                         ? "bg-[var(--bg-2)] font-semibold text-[var(--fg-0)]"
-                         : "text-[var(--fg-1)] hover:bg-[var(--bg-2)]"
+                        ? "bg-zinc-100 font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-850"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
                           isActive
-                             ? "bg-[var(--fg-0)] text-[var(--bg-0)]"
-                             : "bg-[var(--bg-2)] text-[var(--fg-2)]"
+                            ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                            : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />
@@ -177,7 +177,7 @@ export function ModeAndEffortMenu({
                         <div className="truncate text-xs font-medium leading-tight">
                           {m.name}
                         </div>
-                           <div className="text-[10px] text-[var(--fg-3)] truncate">
+                        <div className="text-[10px] text-zinc-400 truncate">
                           {mKey === "research"
                             ? "Autonomous web deep dive (2h)"
                             : mKey === "thinking"
@@ -187,7 +187,7 @@ export function ModeAndEffortMenu({
                       </div>
                     </div>
                     {isActive && (
-                       <Check className="h-4 w-4 shrink-0 text-[var(--success)] ml-1" />
+                      <Check className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 ml-1" />
                     )}
                   </button>
                 );
@@ -196,12 +196,12 @@ export function ModeAndEffortMenu({
           </div>
 
           {/* Section 2: Reasoning Effort */}
-           <div className="mt-3 border-t border-[var(--border-subtle)] pt-2.5">
+          <div className="mt-3 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
             <div className="mb-1.5 flex items-center justify-between text-[10px]">
-                 <span className="font-bold uppercase tracking-wider text-[var(--fg-3)]">
+              <span className="font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Reasoning Effort
               </span>
-                 <span className="font-medium text-[var(--fg-2)]">
+              <span className="font-medium text-zinc-500 dark:text-zinc-400">
                 {currentEffort.name}
               </span>
             </div>
@@ -218,8 +218,8 @@ export function ModeAndEffortMenu({
                     onClick={() => onEffortChange(eKey)}
                     className={`rounded-lg px-2 py-1.5 text-center text-[11px] font-medium transition cursor-pointer ${
                       isActive
-                         ? "bg-[var(--fg-0)] text-[var(--bg-0)] font-semibold shadow-sm"
-                         : "bg-[var(--bg-2)] text-[var(--fg-1)] hover:bg-[var(--bg-3)]"
+                        ? "bg-zinc-900 text-white font-semibold shadow-xs dark:bg-zinc-100 dark:text-zinc-900"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
                     }`}
                   >
                     {eff.name}
@@ -227,7 +227,7 @@ export function ModeAndEffortMenu({
                 );
               })}
             </div>
-             <div className="mt-1.5 text-[10px] text-[var(--fg-3)] leading-tight">
+            <div className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 leading-tight">
               {currentEffort.description}
             </div>
           </div>

@@ -184,17 +184,9 @@ Phryvos runs seamlessly on Android devices inside Termux / PRoot:
 # Set glibc PATH in proot/termux:
 export PATH=/usr/bin:/usr/sbin:/sbin:/bin:/usr/local/bin:$PATH
 
-# Confirm the server will use the glibc Node runtime (not Android/Bionic Node):
-node -p "process.execPath"
-
 # Start daemon
 phryvos-k9 start --port 3000
 ```
-
-The project npm scripts apply the same `/usr/bin` runtime preference
-automatically. Do not run the server with the Termux Node binary directly;
-`better-sqlite3` is a native Linux ARM64 dependency and cannot be loaded by
-Android/Bionic Node from the PRoot filesystem namespace.
 
 Access Phryvos from your Android browser or over your local network via Wi-Fi.
 

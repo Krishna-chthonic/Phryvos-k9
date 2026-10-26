@@ -21,14 +21,14 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       onClick={toggleTheme}
       type="button"
-      className={`relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-1)] text-[var(--fg-1)] transition hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)] active:scale-95 ${className}`}
+      className={`relative flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-900 active:scale-95 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${className}`}
       title={resolvedTheme === "dark" ? "Switch to Light mode" : "Switch to Dark mode"}
       aria-label="Toggle theme"
     >
       {resolvedTheme === "dark" ? (
-        <Sun className="h-4 w-4 text-[var(--warning)] transition-transform duration-200" />
+        <Sun className="h-4 w-4 text-amber-400 transition-transform duration-200" />
       ) : (
-        <Moon className="h-4 w-4 text-[var(--fg-1)] transition-transform duration-200" />
+        <Moon className="h-4 w-4 text-zinc-600 transition-transform duration-200" />
       )}
     </button>
   );

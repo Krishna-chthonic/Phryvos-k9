@@ -7,7 +7,6 @@
  * User instruction verbatim: "1. i want dual theme dark and light"
  */
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
@@ -36,14 +35,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--bg-0)] text-[var(--fg-0)] transition-colors duration-150">
-        <Script
-          id="phryvos-theme-init"
-          strategy="beforeInteractive"
+      <head>
+        <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('phryvos_theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('phryvos_theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />
+      </head>
+      <body className="min-h-full flex flex-col bg-[var(--bg-0)] text-[var(--fg-0)] transition-colors duration-150">
         <ThemeProvider>
           <ToastProvider>
             {children}

@@ -99,8 +99,9 @@ function killProcessTree(pid, signal = "SIGTERM") {
 
 function getGlibcEnv() {
   const env = { ...process.env };
-  // If in proot / Termux environment, ensure standard glibc PATH is first
-  if (fs.existsSync("/usr/bin/node")) {
+  // Only override PATH with glibc if /usr/bin/npm ALSO exists (full Linux/glibc chroot).
+  // On Termux / Android, /usr/bin/node might be a symlink or proot binary while npm is in Termux PATH.
+  if (process.platform !== "android" && fs.existsSync("/usr/bin/node") && fs.existsSync("/usr/bin/npm")) {
     const currentPath = env.PATH || "";
     if (!currentPath.startsWith("/usr/bin")) {
       env.PATH = `/usr/bin:/usr/sbin:/sbin:/bin:/usr/local/bin:${currentPath}`;

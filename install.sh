@@ -31,6 +31,21 @@ echo -e "${BLUE}=== Phryvos Installer ===${NC}\n"
 # 1. Environment & Dependency Checks
 echo -e "${BLUE}[1/4] Checking prerequisites...${NC}"
 
+# Check for Termux environment and ensure native build tools exist
+if [ -n "$PREFIX" ] && [ -d "$PREFIX/bin" ] && command -v pkg >/dev/null 2>&1; then
+    echo -e "${CYAN}Termux detected. Ensuring build tools are installed for better-sqlite3...${NC}"
+    NEEDED_PKGS=()
+    command -v clang >/dev/null 2>&1 || NEEDED_PKGS+=("clang")
+    command -v make >/dev/null 2>&1 || NEEDED_PKGS+=("make")
+    command -v python3 >/dev/null 2>&1 || NEEDED_PKGS+=("python")
+    if [ ${#NEEDED_PKGS[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Installing missing dependencies: ${NEEDED_PKGS[*]}...${NC}"
+        pkg install -y "${NEEDED_PKGS[@]}" build-essential || true
+    fi
+    export CC=clang
+    export CXX=clang++
+fi
+
 # Check Node.js
 if ! command -v node >/dev/null 2>&1; then
     echo -e "${RED}Error: Node.js is not installed.${NC}"

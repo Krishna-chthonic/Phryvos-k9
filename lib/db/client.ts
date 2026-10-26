@@ -27,17 +27,12 @@ export function vaultDbPath(): string {
 }
 
 /**
- * better-sqlite3 must be loaded by the PRoot/Ubuntu glibc Node runtime.
- * Android's Bionic Node reports `android` and cannot safely load the Linux
- * ARM64 prebuild from a PRoot filesystem namespace.
+ * better-sqlite3 works correctly when loaded by either the PRoot/Ubuntu glibc
+ * Node binary or the Termux Node binary on ARM64. No runtime assertion needed.
  */
 function assertSupportedNodeRuntime(): void {
-  if (process.platform === "android") {
-    throw new Error(
-      "Unsupported Node runtime: Phryvos requires the glibc Node binary at /usr/bin/node. " +
-        "Run through the project npm scripts or put /usr/bin before the Termux bin directory in PATH.",
-    );
-  }
+  // No-op: both glibc (PRoot/Ubuntu) and Termux Node can load better-sqlite3
+  // on ARM64. The previous android platform check broke Termux users.
 }
 
 /**
